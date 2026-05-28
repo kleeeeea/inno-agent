@@ -4,11 +4,12 @@ apps/*/dist/
 apps/*/web/dist/
 
 # Local runtime + workspace state (machine-specific)
-runtime/
-workspace/
+# Anchored to repo root so we don't accidentally ignore src/workspace/, etc.
+/runtime/
+/workspace/
+/data/
 .inno/
 .pi/
-data/
 
 # Logs and editor noise
 *.log
