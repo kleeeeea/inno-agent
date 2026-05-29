@@ -30,7 +30,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       # ── 3. 覆盖版本号（仅 workflow_dispatch 且输入了版本） ──────────────────
