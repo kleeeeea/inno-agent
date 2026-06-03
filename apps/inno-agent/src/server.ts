@@ -497,6 +497,24 @@ function findSkillFile(dir: string): string | null {
 }
 
 function validateZipEntries(zipPath: string): void {
+	if (process.platform === "win32") {
+		// Windows: list zip entries via .NET ZipFile API (no system unzip).
+		const ps = `Add-Type -AssemblyName System.IO.Compression.FileSystem; ` +
+			`$zip = [System.IO.Compression.ZipFile]::OpenRead('${zipPath.replace(/'/g, "''")}'); ` +
+			`try { $zip.Entries | ForEach-Object { $_.FullName } } finally { $zip.Dispose() }`;
+		const result = spawnSync("powershell.exe", ["-NoProfile", "-Command", ps], { encoding: "utf-8" });
+		if (result.status !== 0) {
+			throw new Error((result.stderr || "").trim() || "Unable to inspect zip file");
+		}
+		for (const rawLine of result.stdout.split(/\r?\n/)) {
+			const entry = rawLine.trim();
+			if (!entry) continue;
+			if (entry.startsWith("/") || entry.startsWith("\\") || entry.includes("..")) {
+				throw new Error(`Unsafe zip entry path: ${entry}`);
+			}
+		}
+		return;
+	}
 	const result = spawnSync("/usr/bin/unzip", ["-Z1", zipPath], { encoding: "utf-8" });
 	if (result.status !== 0) {
 		throw new Error(result.stderr.trim() || "Unable to inspect zip file");
@@ -520,9 +538,20 @@ function installSkillZip(fileName: string, data: Buffer, targetRoot: string = sk
 
 	try {
 		validateZipEntries(zipPath);
-		const unzipResult = spawnSync("/usr/bin/unzip", ["-qq", "-o", zipPath, "-d", extractDir], { encoding: "utf-8" });
-		if (unzipResult.status !== 0) {
-			throw new Error(unzipResult.stderr.trim() || "Unable to unzip skill package");
+		if (process.platform === "win32") {
+			// Windows: extract via .NET ZipFile.ExtractToDirectory (no system unzip).
+			const ps = `Add-Type -AssemblyName System.IO.Compression.FileSystem; ` +
+				`[System.IO.Compression.ZipFile]::ExtractToDirectory(` +
+				`'${zipPath.replace(/'/g, "''")}', '${extractDir.replace(/'/g, "''")}')`;
+			const unzipResult = spawnSync("powershell.exe", ["-NoProfile", "-Command", ps], { encoding: "utf-8" });
+			if (unzipResult.status !== 0) {
+				throw new Error((unzipResult.stderr || "").trim() || "Unable to unzip skill package");
+			}
+		} else {
+			const unzipResult = spawnSync("/usr/bin/unzip", ["-qq", "-o", zipPath, "-d", extractDir], { encoding: "utf-8" });
+			if (unzipResult.status !== 0) {
+				throw new Error(unzipResult.stderr.trim() || "Unable to unzip skill package");
+			}
 		}
 
 		const skillFile = findSkillFile(extractDir);
