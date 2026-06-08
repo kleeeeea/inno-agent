@@ -1,4 +1,5 @@
 import type { ChatChannel } from "../channel.js";
+import { FileSendNotSupportedError } from "../channel.js";
 import type { IncomingMessage, PushTarget, ChannelName } from "../types.js";
 import type { BridgeReplyBody, BridgePushBody, BridgeHealthStatus } from "./types.js";
 
@@ -38,6 +39,12 @@ export class BridgeChannel implements ChatChannel {
 			text,
 		};
 		await this.callSidecar("/push", body);
+	}
+
+	async sendFile(_target: PushTarget, _filePath: string, _fileName?: string): Promise<void> {
+		// The bridge sidecar protocol only defines text /reply and /push;
+		// there is no file-push endpoint, so file delivery is unsupported.
+		throw new FileSendNotSupportedError(this.name);
 	}
 
 	async checkHealth(): Promise<BridgeHealthStatus> {

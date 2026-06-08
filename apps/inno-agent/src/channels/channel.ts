@@ -1,12 +1,25 @@
 import type { IncomingMessage, PushTarget } from "./types.js";
 import { readJson, writeJson } from "../storage/file-store.js";
 
+/** Thrown when a channel cannot send files (e.g. WeChat iLink). */
+export class FileSendNotSupportedError extends Error {
+	constructor(channelName: string) {
+		super(`渠道「${channelName}」暂不支持发送文件。`);
+		this.name = "FileSendNotSupportedError";
+	}
+}
+
 export interface ChatChannel {
 	readonly name: string;
 	verify(req: { headers: Record<string, string>; body: unknown }): Promise<boolean>;
 	parse(body: unknown): Promise<IncomingMessage | null>;
 	reply(message: IncomingMessage, text: string): Promise<void>;
 	push(target: PushTarget, text: string): Promise<void>;
+	/**
+	 * Send a local file to a push target. Optional: channels that do not support
+	 * file delivery throw {@link FileSendNotSupportedError}.
+	 */
+	sendFile?(target: PushTarget, filePath: string, fileName?: string): Promise<void>;
 }
 
 export type MessageHandler = (msg: IncomingMessage) => Promise<void> | void;

@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import type { RealtimeChatChannel, MessageHandler } from "../channel.js";
+import { FileSendNotSupportedError } from "../channel.js";
 import type { IncomingMessage, PushTarget } from "../types.js";
 import type { PersonalChannelConfig } from "../../config.js";
 import { ILinkClient, AuthExpiredError, type ILinkMessage } from "./ilink-client.js";
@@ -130,5 +131,10 @@ export class WeChatChannel implements RealtimeChatChannel {
 	async push(target: PushTarget, text: string): Promise<void> {
 		const contextToken = this.contextTokens.get(target.chatId);
 		await this.client.sendText(target.chatId, text, contextToken);
+	}
+
+	async sendFile(_target: PushTarget, _filePath: string, _fileName?: string): Promise<void> {
+		// iLink only exposes a text send API; file delivery is not supported.
+		throw new FileSendNotSupportedError(this.name);
 	}
 }

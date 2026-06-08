@@ -492,3 +492,24 @@ inno-workspace-panel textarea {
 	scrollbar-width: thin;
 	scrollbar-color: rgba(148, 163, 184, 0.25) transparent;
 }
+
+/*
+ * @uiw/react-md-editor renders the caret in an invisible <textarea>
+ * (.w-md-editor-text-input) overlaid on a syntax-highlighted <pre>
+ * (.w-md-editor-text-pre). They only stay aligned when both share the same
+ * font metrics, which the package guarantees by inheriting from the shared
+ * .w-md-editor-text parent (14px / 18px).
+ *
+ * Our global `textarea { font: inherit }` plus `.inno-*-scope textarea`
+ * font-size/line-height rules hit ONLY the textarea, leaving the <pre> at the
+ * package's metrics. The size/line-height mismatch drifts the caret away from
+ * the characters it sits on. Re-sync both layers to the package's intent.
+ */
+.w-md-editor-text-input,
+.w-md-editor-text-pre,
+.w-md-editor-text-pre > code {
+	font-size: inherit !important;
+	line-height: inherit !important;
+	letter-spacing: inherit !important;
+	tab-size: inherit !important;
+}

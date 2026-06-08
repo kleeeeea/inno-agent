@@ -75,8 +75,9 @@ const skillsDir = paths.skillsDir;
 const channelRegistry = new ChannelRegistry(join(dataDir, "channels", "default-targets.json"));
 const workspaceRegistry = new WorkspaceRegistry(paths.workspaceDir, dataDir);
 workspaceRegistry.ensureBootstrapped();
-// One-time: bind legacy unbound sessions (which used to fall back to the public
-// workspace) to the now-ordinary default workspace so their files stay reachable.
+// One-time: bind legacy unbound sessions to the default workspace IF it still
+// exists (older installs). On fresh installs the default workspace is gone, so
+// migrateUnboundSessions no-ops and unbound sessions fall back to tmp.
 try {
 	const sessionFiles = existsSync(paths.sessionDir)
 		? readdirSync(paths.sessionDir).filter((f) => f.endsWith(".jsonl"))
@@ -548,6 +549,50 @@ function validateZipEntries(zipPath: string): void {
 	}
 }
 
+/**
+ * Build a `Content-Disposition: attachment` header value that survives
+ * non-ASCII filenames. Falls back to a sanitized ASCII name plus the RFC 5987
+ * `filename*` form so browsers pick the UTF-8 variant when supported.
+ */
+function contentDispositionAttachment(fileName: string): string {
+	const asciiFallback = fileName.replace(/[^\x20-\x7e]/g, "_").replace(/["\\]/g, "_");
+	const encoded = encodeURIComponent(fileName);
+	return `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encoded}`;
+}
+
+/**
+ * Zip a directory and return the archive as a Buffer.
+ *
+ * Uses the system `zip` on macOS/Linux and PowerShell `Compress-Archive` on
+ * Windows so we avoid pulling in a new dependency. The archive is built in a
+ * temp dir and read back into memory (workspace folders are expected to be
+ * small enough for an in-memory download).
+ */
+function zipDirectory(dirPath: string): Buffer {
+	const tempRoot = join(tmpdir(), `inno-zip-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+	const zipPath = join(tempRoot, "archive.zip");
+	ensureDir(tempRoot);
+	try {
+		if (process.platform === "win32") {
+			const ps = `Compress-Archive -Path '${dirPath.replace(/'/g, "''")}\\*' ` +
+				`-DestinationPath '${zipPath.replace(/'/g, "''")}' -Force`;
+			const result = spawnSync("powershell.exe", ["-NoProfile", "-Command", ps], { encoding: "utf-8" });
+			if (result.status !== 0) {
+				throw new Error((result.stderr || "").trim() || "Unable to create zip archive");
+			}
+		} else {
+			// `-r` recurse, run inside the dir so paths are relative to it.
+			const result = spawnSync("/usr/bin/zip", ["-r", "-q", zipPath, "."], { cwd: dirPath, encoding: "utf-8" });
+			if (result.status !== 0) {
+				throw new Error((result.stderr || "").trim() || "Unable to create zip archive");
+			}
+		}
+		return readFileSync(zipPath);
+	} finally {
+		rmSync(tempRoot, { recursive: true, force: true });
+	}
+}
+
 function installSkillZip(fileName: string, data: Buffer, targetRoot: string = skillsDir): { name: string; filePath: string } {
 	const fallbackName = slugifySkillName(basename(fileName, extname(fileName)));
 	const tempRoot = join(tmpdir(), `inno-skill-${Date.now()}-${Math.random().toString(36).slice(2)}`);
@@ -855,17 +900,24 @@ function contentTypeForWorkspaceFile(filePath: string): string {
 	if (ext === ".gif") return "image/gif";
 	if (ext === ".svg") return "image/svg+xml";
 	if (ext === ".webp") return "image/webp";
+	if (ext === ".docx") return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+	if (ext === ".xlsx") return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+	if (ext === ".pptx") return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
 	return TEXT_PREVIEW_EXTENSIONS.has(ext) ? "text/plain; charset=utf-8" : "application/octet-stream";
 }
 
 const TEXT_NOEXT_NAMES = new Set(["makefile", "dockerfile", "gemfile", "rakefile", "procfile", "vagrantfile"]);
 
-function workspaceFileKind(filePath: string): "markdown" | "html" | "pdf" | "image" | "text" | "binary" {
+/** Office document extensions previewable via LiteParse text extraction. */
+const OFFICE_PREVIEW_EXTENSIONS = new Set([".docx", ".xlsx", ".pptx"]);
+
+function workspaceFileKind(filePath: string): "markdown" | "html" | "pdf" | "image" | "office" | "text" | "binary" {
 	const ext = extname(filePath).toLowerCase();
 	if (ext === ".md" || ext === ".markdown") return "markdown";
 	if (ext === ".html" || ext === ".htm") return "html";
 	if (ext === ".pdf") return "pdf";
 	if ([".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"].includes(ext)) return "image";
+	if (OFFICE_PREVIEW_EXTENSIONS.has(ext)) return "office";
 	if (TEXT_PREVIEW_EXTENSIONS.has(ext)) return "text";
 	if (!ext && TEXT_NOEXT_NAMES.has(basename(filePath).toLowerCase())) return "text";
 	return "binary";
@@ -922,6 +974,8 @@ interface SessionSummary {
 	messageCount: number;
 	preview: string;
 	channels: SessionChannel[];
+	/** Immutable birthplace of the session (web/cli/feishu/wechat/scheduler). */
+	origin?: SessionChannel;
 }
 
 type SessionTopicMetadata = Record<string, { topic: string; updatedAt: string; generated?: boolean }>;
@@ -1097,7 +1151,7 @@ function parseSessionFile(filePath: string): { summary: SessionSummary; messages
 	}
 }
 
-type SessionChannelMetadata = Record<string, { channels: SessionChannel[]; updatedAt: string }>;
+type SessionChannelMetadata = Record<string, { channels: SessionChannel[]; origin?: SessionChannel; updatedAt: string }>;
 
 function sessionChannelMetadataPath(): string {
 	return join(dataDir, "sessions", "channels.json");
@@ -1115,39 +1169,78 @@ function mergeChannels(a: SessionChannel[], b: SessionChannel[]): SessionChannel
 	return Array.from(new Set([...a, ...b])).sort();
 }
 
-function recordCurrentSessionChannel(channel: SessionChannel, explicitSessionId?: string): void {
+function recordCurrentSessionChannel(
+	channel: SessionChannel,
+	explicitSessionId?: string,
+	options?: { setOriginIfEmpty?: boolean },
+): void {
 	const id = explicitSessionId || (() => {
 		const sessionFile = getSession().sessionFile;
 		return sessionFile ? basename(sessionFile) : "";
 	})();
 	if (!id) return;
 	const metadata = readSessionChannelMetadata();
+	const prev = metadata[id];
 	metadata[id] = {
-		channels: mergeChannels(metadata[id]?.channels ?? [], [channel]),
+		channels: mergeChannels(prev?.channels ?? [], [channel]),
+		// origin is the immutable birthplace of the session: set once and never
+		// overwritten. Interaction tagging (e.g. a web session pushing a file to
+		// feishu) must NOT change origin, so it omits setOriginIfEmpty.
+		origin: prev?.origin ?? (options?.setOriginIfEmpty ? channel : undefined),
 		updatedAt: new Date().toISOString(),
 	};
 	writeJson(sessionChannelMetadataPath(), metadata);
 }
 
+/** Derive a session's origin, with backfill for legacy sessions lacking one. */
+function deriveOrigin(meta: { channels: SessionChannel[]; origin?: SessionChannel } | undefined): SessionChannel {
+	if (meta?.origin) return meta.origin;
+	// Legacy backfill: prefer the first non-web channel the session touched
+	// (channel-native sessions), otherwise treat it as web.
+	const nonWeb = (meta?.channels ?? []).find((c) => c !== "web");
+	return nonWeb ?? "web";
+}
+
 function withRecordedChannels(summary: SessionSummary, metadata: SessionChannelMetadata): SessionSummary {
-	const explicit = metadata[summary.id]?.channels ?? [];
+	const meta = metadata[summary.id];
+	const explicit = meta?.channels ?? [];
 	if (explicit.length > 0) {
 		// channels.json is the source of truth — merge with content-detected channels
 		// but exclude the empty-array fallback from parseSessionFile.
 		const contentChannels = summary.channels; // may be [] if nothing detected from JSONL
-		return { ...summary, channels: mergeChannels(contentChannels, explicit) };
+		return { ...summary, channels: mergeChannels(contentChannels, explicit), origin: deriveOrigin(meta) };
 	}
 	// No explicit metadata — use content-detected channels, or fall back to "cli"
 	// for legacy sessions that predate channel tracking.
+	const channels = summary.channels.length > 0 ? summary.channels : ["cli" as SessionChannel];
 	return {
 		...summary,
-		channels: summary.channels.length > 0 ? summary.channels : ["cli"],
+		channels,
+		origin: deriveOrigin({ channels }),
 	};
 }
 
 function withRecordedTopic(summary: SessionSummary, metadata: SessionTopicMetadata): SessionSummary {
 	const topic = metadata[summary.id]?.topic?.trim();
 	return topic ? { ...summary, name: topic } : summary;
+}
+
+/**
+ * CLI-origin sessions are created by the terminal agent, which never touches
+ * the workspace registry, so they stay unbound and fall back to tmp. Lazily
+ * bind them to the dedicated CLI workspace so they group under "CLI 区".
+ */
+function bindCliSessionWorkspace(summary: SessionSummary): SessionSummary {
+	if (summary.origin !== "cli") return summary;
+	try {
+		if (!workspaceRegistry.isSessionBound(summary.id)) {
+			const ws = workspaceRegistry.ensureChannelWorkspace("cli");
+			workspaceRegistry.bindSession(summary.id, ws.id);
+		}
+	} catch {
+		// best-effort — never fail the listing on a binding hiccup
+	}
+	return summary;
 }
 
 function cleanGeneratedTopic(raw: string): string {
@@ -1711,6 +1804,7 @@ const server = createServer(async (req, res) => {
 						.map((file) => parseSessionFile(join(sessionDir, file))?.summary)
 						.filter((summary): summary is SessionSummary => Boolean(summary))
 						.map((summary) => withRecordedChannels(summary, channelMetadata))
+						.map((summary) => bindCliSessionWorkspace(summary))
 						.map((summary) => withRecordedTopic(summary, topicMetadata))
 						.map((summary) => ({ ...summary, archived: archiveMetadata[summary.id] === true }))
 						.sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
@@ -2218,8 +2312,9 @@ const server = createServer(async (req, res) => {
 			const stat = statSync(filePath);
 			const kind = workspaceFileKind(filePath);
 			const contentType = contentTypeForWorkspaceFile(filePath);
-			if (kind === "binary" || kind === "pdf" || kind === "image") {
+			if (kind === "binary" || kind === "pdf" || kind === "image" || kind === "office") {
 				const relPath = workspaceRelativePath(root, filePath);
+				const rawUrl = `/api/workspace/raw?workspaceId=${encodeURIComponent(wsId)}&path=${encodeURIComponent(relPath)}`;
 				json(res, 200, {
 					path: relPath,
 					name: basename(filePath),
@@ -2227,7 +2322,11 @@ const server = createServer(async (req, res) => {
 					mimeType: contentType,
 					size: stat.size,
 					updatedAt: stat.mtime.toISOString(),
-					url: `/api/workspace/raw?workspaceId=${encodeURIComponent(wsId)}&path=${encodeURIComponent(relPath)}`,
+					url: rawUrl,
+					// Office docs carry a separate URL that returns extracted text JSON.
+					previewUrl: kind === "office"
+						? `/api/workspace/office-preview?workspaceId=${encodeURIComponent(wsId)}&path=${encodeURIComponent(relPath)}`
+						: undefined,
 				});
 				return;
 			}
@@ -2250,6 +2349,7 @@ const server = createServer(async (req, res) => {
 		if ((method === "GET" || method === "HEAD") && url.startsWith("/api/workspace/raw?")) {
 			const params = new URL(url, "http://localhost").searchParams;
 			const requestedPath = params.get("path") ?? "";
+			const wantsDownload = params.get("download") === "1";
 			const wsId = workspaceIdFromQuery(url);
 			const filePath = safeWorkspacePath(wsId, requestedPath);
 			if (!filePath || !existsSync(filePath) || !statSync(filePath).isFile()) {
@@ -2257,12 +2357,79 @@ const server = createServer(async (req, res) => {
 				return;
 			}
 			const content = readFileSync(filePath);
-			res.writeHead(200, {
+			const headers: Record<string, string | number> = {
 				"Content-Type": contentTypeForWorkspaceFile(filePath),
 				"Content-Length": content.length,
 				"Cache-Control": "no-store",
-			});
+			};
+			if (wantsDownload) {
+				headers["Content-Disposition"] = contentDispositionAttachment(basename(filePath));
+			}
+			res.writeHead(200, headers);
 			res.end(method === "GET" ? content : undefined);
+			return;
+		}
+
+		// Download a directory as a zip archive.
+		if ((method === "GET" || method === "HEAD") && url.startsWith("/api/workspace/download-folder?")) {
+			const params = new URL(url, "http://localhost").searchParams;
+			const requestedPath = params.get("path") ?? "";
+			const wsId = workspaceIdFromQuery(url);
+			const root = workspaceRegistry.resolveWorkspaceDir(wsId);
+			if (!root) { json(res, 404, { error: "Workspace not found" }); return; }
+			// Empty path → zip the whole workspace root.
+			const dirPath = requestedPath ? safeWorkspacePath(wsId, requestedPath) : root;
+			if (!dirPath || !existsSync(dirPath) || !statSync(dirPath).isDirectory()) {
+				json(res, 404, { error: "Workspace folder not found" });
+				return;
+			}
+			const archiveName = `${basename(dirPath) || basename(root) || "workspace"}.zip`;
+			if (method === "HEAD") {
+				res.writeHead(200, {
+					"Content-Type": "application/zip",
+					"Content-Disposition": contentDispositionAttachment(archiveName),
+					"Cache-Control": "no-store",
+				});
+				res.end();
+				return;
+			}
+			try {
+				const zipData = zipDirectory(dirPath);
+				res.writeHead(200, {
+					"Content-Type": "application/zip",
+					"Content-Length": zipData.length,
+					"Content-Disposition": contentDispositionAttachment(archiveName),
+					"Cache-Control": "no-store",
+				});
+				res.end(zipData);
+			} catch (err) {
+				json(res, 500, { error: err instanceof Error ? err.message : "Failed to create zip archive" });
+			}
+			return;
+		}
+
+		// Extract text from office documents (docx/xlsx/pptx) for in-browser preview.
+		if (method === "GET" && url.startsWith("/api/workspace/office-preview?")) {
+			const params = new URL(url, "http://localhost").searchParams;
+			const requestedPath = params.get("path") ?? "";
+			const wsId = workspaceIdFromQuery(url);
+			const filePath = safeWorkspacePath(wsId, requestedPath);
+			if (!filePath || !existsSync(filePath) || !statSync(filePath).isFile()) {
+				json(res, 404, { error: "Workspace file not found" });
+				return;
+			}
+			try {
+				const { parseDocument } = await import("./memory/l2/document-parser.js");
+				const parsed = await parseDocument(filePath);
+				json(res, 200, {
+					name: basename(filePath),
+					pageCount: parsed.pageCount,
+					text: parsed.text,
+					pages: parsed.pages,
+				});
+			} catch (err) {
+				json(res, 422, { error: err instanceof Error ? err.message : "Failed to parse document" });
+			}
 			return;
 		}
 
@@ -2825,7 +2992,7 @@ const server = createServer(async (req, res) => {
 			} else {
 				output = await runPromptSerialized(prompt, images.length ? images : undefined);
 			}
-			recordCurrentSessionChannel("web", requestedSessionId || undefined);
+			recordCurrentSessionChannel("web", requestedSessionId || undefined, { setOriginIfEmpty: true });
 			maybeAutoGenerateTopic(requestedSessionId || getCurrentSessionId());
 			json(res, 200, { response: output });
 			return;
@@ -2930,7 +3097,7 @@ const server = createServer(async (req, res) => {
 				const fullText = targetSessionPath
 					? await runPromptStreamingInSession(targetSessionPath, prompt, onEvent, imageArgs)
 					: await runPromptStreaming(prompt, onEvent, imageArgs);
-				recordCurrentSessionChannel("web", capturedSessionId);
+				recordCurrentSessionChannel("web", capturedSessionId, { setOriginIfEmpty: true });
 				if (!aborted) sseWrite({ type: "done", fullText });
 				maybeAutoGenerateTopic(capturedSessionId);
 			} catch (err) {
@@ -2976,6 +3143,7 @@ initSession(config, paths, channelRegistry, {
 		workspaceRegistry,
 		runRecordStore,
 		getCurrentSessionId,
+		recordChannelInteraction: (channel) => recordCurrentSessionChannel(channel as SessionChannel),
 	},
 })
 	.then(() => {
@@ -2988,7 +3156,7 @@ initSession(config, paths, channelRegistry, {
 			runPromptInSession,
 			createNewSession,
 			getCurrentSessionId,
-			recordSessionChannel: (ch, sid?) => recordCurrentSessionChannel(ch as SessionChannel, sid),
+			recordSessionChannel: (ch, sid?) => recordCurrentSessionChannel(ch as SessionChannel, sid, { setOriginIfEmpty: true }),
 			maybeAutoGenerateTopic,
 			onSessionCreated: (sessionId, channel) => {
 				// Channel-originated sessions bind to a fixed per-channel workspace
