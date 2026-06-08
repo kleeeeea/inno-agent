@@ -230,4 +230,8 @@ export class FeishuChannel implements RealtimeChatChannel {
 	async push(target: PushTarget, text: string): Promise<void> {
 		await this.api.sendMessage(target.chatId, text);
 	}
+
+	async sendFile(target: PushTarget, filePath: string, fileName?: string): Promise<void> {
+		await this.api.sendFile(target.chatId, filePath, fileName);
+	}
 }

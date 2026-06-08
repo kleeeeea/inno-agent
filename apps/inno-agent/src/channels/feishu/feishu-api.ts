@@ -1,8 +1,41 @@
 import * as Lark from "@larksuiteoapi/node-sdk";
+import { readFileSync } from "node:fs";
+import { basename, extname } from "node:path";
 
 export interface FeishuConfig {
 	appId: string;
 	appSecret: string;
+}
+
+/** Map a file extension to a Feishu file_type. Unknown types fall back to "stream". */
+function feishuFileType(fileName: string): "opus" | "mp4" | "pdf" | "doc" | "xls" | "ppt" | "stream" {
+	const ext = extname(fileName).toLowerCase().replace(/^\./, "");
+	switch (ext) {
+		case "opus":
+			return "opus";
+		case "mp4":
+			return "mp4";
+		case "pdf":
+			return "pdf";
+		case "doc":
+		case "docx":
+			return "doc";
+		case "xls":
+		case "xlsx":
+			return "xls";
+		case "ppt":
+		case "pptx":
+			return "ppt";
+		default:
+			return "stream";
+	}
+}
+
+const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "webp", "bmp"]);
+
+function isImageFile(fileName: string): boolean {
+	const ext = extname(fileName).toLowerCase().replace(/^\./, "");
+	return IMAGE_EXTENSIONS.has(ext);
 }
 
 /**
@@ -72,6 +105,59 @@ export class FeishuAPI {
 				console.error(`[feishu] send error (part ${i + 1}/${posts.length}): ${resp.msg} (code: ${resp.code})`);
 				throw new Error(`Feishu send failed: ${resp.msg} (code: ${resp.code})`);
 			}
+		}
+	}
+
+	/**
+	 * Upload a local file and send it to a chat as a file (or image) message.
+	 * Images are routed through the image upload API + `image` message type;
+	 * everything else uses the file upload API + `file` message type.
+	 */
+	async sendFile(chatId: string, filePath: string, fileName?: string): Promise<void> {
+		const name = fileName ?? basename(filePath);
+		const buffer = readFileSync(filePath);
+
+		if (isImageFile(name)) {
+			const upload = await this.client.im.v1.image.create({
+				data: { image_type: "message", image: buffer },
+			});
+			if (!upload?.image_key) {
+				throw new Error("Feishu image upload failed: no image_key returned");
+			}
+			const resp = await this.client.im.v1.message.create({
+				params: { receive_id_type: "chat_id" },
+				data: {
+					receive_id: chatId,
+					content: JSON.stringify({ image_key: upload.image_key }),
+					msg_type: "image",
+				},
+			});
+			if (resp.code !== 0) {
+				throw new Error(`Feishu image send failed: ${resp.msg} (code: ${resp.code})`);
+			}
+			return;
+		}
+
+		const upload = await this.client.im.v1.file.create({
+			data: {
+				file_type: feishuFileType(name),
+				file_name: name,
+				file: buffer,
+			},
+		});
+		if (!upload?.file_key) {
+			throw new Error("Feishu file upload failed: no file_key returned");
+		}
+		const resp = await this.client.im.v1.message.create({
+			params: { receive_id_type: "chat_id" },
+			data: {
+				receive_id: chatId,
+				content: JSON.stringify({ file_key: upload.file_key }),
+				msg_type: "file",
+			},
+		});
+		if (resp.code !== 0) {
+			throw new Error(`Feishu file send failed: ${resp.msg} (code: ${resp.code})`);
 		}
 	}
 

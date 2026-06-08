@@ -12,6 +12,7 @@ import { loadEvents, loadProfile } from "../memory/learner/profile-store.js";
 import { buildContextPack, formatContextPackForPrompt } from "../memory/learner/context-pack.js";
 import { JobStore } from "../scheduler/job-store.js";
 import { createSchedulerTools } from "../scheduler/scheduler-tools.js";
+import { createChannelTools } from "../channels/channel-tools.js";
 import { createL2Tools } from "../memory/l2/l2-tools.js";
 import { L3Memory, createL3Tools, formatRecallForPrompt } from "../memory/l3/l3-tools.js";
 import { createPracticeTools } from "./practice-tools.js";
@@ -161,6 +162,19 @@ export function createInnoExtension(
 		const schedulerTools = createSchedulerTools(jobStore, channelRegistry);
 		for (const tool of schedulerTools) {
 			pi.registerTool(tool);
+		}
+
+		// 3a. Register channel tools (send workspace files out to chat channels)
+		if (channelRegistry) {
+			const channelTools = createChannelTools({
+				channelRegistry,
+				workspaceRegistry: deps?.workspaceRegistry,
+				getCurrentSessionId: deps?.getCurrentSessionId,
+				workspaceDir: paths.workspaceDir,
+			});
+			for (const tool of channelTools) {
+				pi.registerTool(tool);
+			}
 		}
 
 		// 4. Register L2 Wiki memory tools
