@@ -59,88 +59,177 @@ applyRuntimeEnvironment(paths);
 let config = loadConfig(paths.configPath);
 const port = getConfiguredPort(config, parsed.options.port);
 
-// Ensure directories
-const dataDir = paths.dataDir;
-ensureDir(paths.learnerDataDir);
-ensureDir(paths.sessionDir);
-ensureDir(paths.jobsDir);
-ensureDir(paths.skillsDir);
-ensureDir(paths.workspaceDir);
+// ---------------------------------------------------------------------------
+// Lazy bootstrap — directories, stores, channels, and agent session are
+// deferred until the first meaningful web request (not /health or static files).
+// Before that, no INNO_HOME subdirectories or files are created.
+// ---------------------------------------------------------------------------
 
-// Stores
-const jobStore = new JobStore(paths.jobsDir);
-jobStore.normalizePersistedJobs();
+const dataDir = paths.dataDir;
 const l2DataDir = paths.l2DataDir;
 const skillsDir = paths.skillsDir;
-const channelRegistry = new ChannelRegistry(join(dataDir, "channels", "default-targets.json"));
-const workspaceRegistry = new WorkspaceRegistry(paths.workspaceDir, dataDir);
-workspaceRegistry.ensureBootstrapped();
-// One-time: bind legacy unbound sessions to the default workspace IF it still
-// exists (older installs). On fresh installs the default workspace is gone, so
-// migrateUnboundSessions no-ops and unbound sessions fall back to tmp.
-try {
-	const sessionFiles = existsSync(paths.sessionDir)
-		? readdirSync(paths.sessionDir).filter((f) => f.endsWith(".jsonl"))
-		: [];
-	workspaceRegistry.migrateUnboundSessions(sessionFiles, DEFAULT_WORKSPACE_ID);
-} catch (err) {
-	console.warn("[sessions] unbound-session migration failed:", err instanceof Error ? err.message : err);
-}
-const runRecordStore = new RunRecordStore(join(dataDir, "runs"));
-const terminalManager = new TerminalSessionManager(workspaceRegistry, runRecordStore);
 
-// Resolve agent cwd per session based on its workspace binding.
-setWorkspaceCwdResolver((sessionPath: string) => {
-	const id = basename(sessionPath);
-	const workspaceId = workspaceRegistry.getSessionWorkspaceId(id);
-	return workspaceRegistry.resolveWorkspaceDir(workspaceId);
-});
-
-migrateLegacyPiSkills();
-
-function migrateReminderChannels(): void {
-	const defaultFeishuTarget = channelRegistry.getDefaultTarget("feishu");
-	if (!defaultFeishuTarget) return;
-	for (const job of jobStore.list()) {
-		if (job.taskType !== "push_reminder") continue;
-		if (job.channel) continue;
-		jobStore.update(job.id, {
-			channel: "feishu",
-			target: defaultFeishuTarget,
-		});
-	}
-}
-
-// Register enabled channels
+// All stateful services are declared with !: — they are guaranteed to be
+// initialised before any API handler that uses them runs, because the HTTP
+// handler calls ensureBootstrapped() before dispatching.
+let jobStore!: JobStore;
+let channelRegistry!: ChannelRegistry;
+let workspaceRegistry!: WorkspaceRegistry;
+let runRecordStore!: RunRecordStore;
+let terminalManager!: TerminalSessionManager;
 let feishuChannel: FeishuChannel | null = null;
-if (config.feishu?.appId && config.channels?.feishu?.enabled) {
-	feishuChannel = new FeishuChannel(config.feishu, dataDir, config.channels.feishu);
-	channelRegistry.register(feishuChannel);
-}
-
-// Register bridge channels (QQ, and WeChat in bridge mode)
-const bridgeToken = config.bridge?.token;
-if (bridgeToken) {
-	const qqConfig = config.channels?.qq as PersonalBridgeChannelConfig | undefined;
-	if (qqConfig?.enabled && qqConfig.sidecarBaseUrl) {
-		channelRegistry.register(new BridgeChannel("qq", qqConfig.sidecarBaseUrl, bridgeToken));
-	}
-	const wechatConfig = config.channels?.wechat;
-	if (wechatConfig?.enabled && "sidecarBaseUrl" in wechatConfig && (wechatConfig as PersonalBridgeChannelConfig).mode === "bridge") {
-		channelRegistry.register(new BridgeChannel("wechat", (wechatConfig as PersonalBridgeChannelConfig).sidecarBaseUrl, bridgeToken));
-	}
-}
-
-// Register WeChat iLink channel (native mode, default)
 let wechatChannel: WeChatChannel | null = null;
-const wechatConfig = config.channels?.wechat;
-if (wechatConfig?.enabled && (!("mode" in wechatConfig) || (wechatConfig as { mode?: string }).mode !== "bridge")) {
-	wechatChannel = new WeChatChannel(dataDir, wechatConfig);
-	channelRegistry.register(wechatChannel);
-}
-migrateReminderChannels();
-
 let dispatcher: PersonalChannelDispatcher | null = null;
+
+let bootstrapped = false;
+let bootstrapPromise: Promise<void> | null = null;
+let bridgeToken: string | undefined;
+
+/**
+ * One-shot lazy bootstrap. Idempotent — concurrent requests while the first
+ * bootstrap is still in-flight all await the same promise.
+ */
+async function ensureBootstrapped(): Promise<void> {
+	if (bootstrapped) return;
+	if (bootstrapPromise) return bootstrapPromise;
+
+	bootstrapPromise = (async () => {
+		console.log("[inno-server] first meaningful request — bootstrapping...");
+
+		// ---- data directories ----
+		ensureDir(paths.learnerDataDir);
+		ensureDir(paths.sessionDir);
+		ensureDir(paths.jobsDir);
+		ensureDir(paths.skillsDir);
+		ensureDir(paths.workspaceDir);
+
+		// ---- stores ----
+		jobStore = new JobStore(paths.jobsDir);
+		jobStore.normalizePersistedJobs();
+
+		channelRegistry = new ChannelRegistry(join(dataDir, "channels", "default-targets.json"));
+
+		workspaceRegistry = new WorkspaceRegistry(paths.workspaceDir, dataDir);
+		workspaceRegistry.ensureBootstrapped();
+		try {
+			const sessionFiles = existsSync(paths.sessionDir)
+				? readdirSync(paths.sessionDir).filter((f) => f.endsWith(".jsonl"))
+				: [];
+			workspaceRegistry.migrateUnboundSessions(sessionFiles, DEFAULT_WORKSPACE_ID);
+		} catch (err) {
+			console.warn("[sessions] unbound-session migration failed:", err instanceof Error ? err.message : err);
+		}
+
+		runRecordStore = new RunRecordStore(join(dataDir, "runs"));
+		terminalManager = new TerminalSessionManager(workspaceRegistry, runRecordStore);
+
+		// Resolve agent cwd per session based on its workspace binding.
+		setWorkspaceCwdResolver((sessionPath: string) => {
+			const id = basename(sessionPath);
+			const workspaceId = workspaceRegistry.getSessionWorkspaceId(id);
+			return workspaceRegistry.resolveWorkspaceDir(workspaceId);
+		});
+
+		migrateLegacyPiSkills();
+
+		// ---- channels ----
+		function migrateReminderChannels(): void {
+			const defaultFeishuTarget = channelRegistry.getDefaultTarget("feishu");
+			if (!defaultFeishuTarget) return;
+			for (const job of jobStore.list()) {
+				if (job.taskType !== "push_reminder") continue;
+				if (job.channel) continue;
+				jobStore.update(job.id, {
+					channel: "feishu",
+					target: defaultFeishuTarget,
+				});
+			}
+		}
+
+		if (config.feishu?.appId && config.channels?.feishu?.enabled) {
+			feishuChannel = new FeishuChannel(config.feishu, dataDir, config.channels.feishu);
+			channelRegistry.register(feishuChannel);
+		}
+
+		bridgeToken = config.bridge?.token;
+		if (bridgeToken) {
+			const qqConfig = config.channels?.qq as PersonalBridgeChannelConfig | undefined;
+			if (qqConfig?.enabled && qqConfig.sidecarBaseUrl) {
+				channelRegistry.register(new BridgeChannel("qq", qqConfig.sidecarBaseUrl, bridgeToken));
+			}
+			const wechatConfigBridge = config.channels?.wechat;
+			if (wechatConfigBridge?.enabled && "sidecarBaseUrl" in wechatConfigBridge && (wechatConfigBridge as PersonalBridgeChannelConfig).mode === "bridge") {
+				channelRegistry.register(new BridgeChannel("wechat", (wechatConfigBridge as PersonalBridgeChannelConfig).sidecarBaseUrl, bridgeToken));
+			}
+		}
+
+		const wechatCfg = config.channels?.wechat;
+		if (wechatCfg?.enabled && (!("mode" in wechatCfg) || (wechatCfg as { mode?: string }).mode !== "bridge")) {
+			wechatChannel = new WeChatChannel(dataDir, wechatCfg);
+			channelRegistry.register(wechatChannel);
+		}
+		migrateReminderChannels();
+
+		// ---- agent session ----
+		console.log("[inno-server] initializing agent session...");
+		await initSession(config, paths, channelRegistry, {
+			sandbox: parsed.options.sandbox,
+			extensionDeps: {
+				workspaceRegistry,
+				runRecordStore,
+				getCurrentSessionId,
+				recordChannelInteraction: (channel) => recordCurrentSessionChannel(channel as SessionChannel),
+			},
+		});
+
+		// ---- post-init: dispatcher, channels, cron, WebSocket ----
+		const channelsDataDir = join(dataDir, "channels");
+		ensureDir(channelsDataDir);
+		dispatcher = new PersonalChannelDispatcher({
+			channelRegistry,
+			runPrompt: runPromptSerialized,
+			runPromptInSession,
+			createNewSession,
+			getCurrentSessionId,
+			recordSessionChannel: (ch, sid?) => recordCurrentSessionChannel(ch as SessionChannel, sid, { setOriginIfEmpty: true }),
+			maybeAutoGenerateTopic,
+			onSessionCreated: (sessionId, channel) => {
+				try {
+					const ws = workspaceRegistry.ensureChannelWorkspace(channel);
+					workspaceRegistry.bindSession(sessionId, ws.id);
+				} catch (err) {
+					console.warn(`[sessions] failed to bind channel session ${sessionId}:`, err instanceof Error ? err.message : err);
+				}
+			},
+			channelsDataDir,
+			sessionDir: join(dataDir, "sessions"),
+		});
+
+		if (feishuChannel) {
+			feishuChannel.onMessage((msg) => dispatcher!.handle(feishuChannel!, msg));
+			feishuChannel.start();
+		}
+		if (wechatChannel) {
+			wechatChannel.onMessage((msg) => dispatcher!.handle(wechatChannel!, msg));
+			wechatChannel.start();
+		}
+
+		const scheduler = new CronScheduler(jobStore, channelRegistry);
+		scheduler.start();
+
+		console.log("[inno-server] channels:", channelRegistry.all().map((c) => c.name).join(", ") || "none");
+		console.log("[inno-server] jobs loaded:", jobStore.list().length);
+
+		bootstrapped = true;
+		console.log("[inno-server] bootstrap complete");
+	})().catch((err) => {
+		console.error("[inno-server] bootstrap failed:", err);
+		bootstrapPromise = null; // allow retry on next request
+		throw err;
+	});
+
+	return bootstrapPromise;
+}
 
 // ---------------------------------------------------------------------------
 // HTTP helpers
@@ -1544,10 +1633,18 @@ const server = createServer(async (req, res) => {
 	const method = req.method ?? "GET";
 
 	try {
-		// --- Health check ---
+		// --- Health check (no bootstrap needed) ---
 		if (method === "GET" && url === "/health") {
 			json(res, 200, { status: "ok" });
 			return;
+		}
+
+		// --- Lazy bootstrap on first API request ---
+		// All /api/* endpoints need the agent session and data stores.
+		// Static files and SPA fallback skip this so no directories are
+		// created until the user actually interacts with the web UI.
+		if (url.startsWith("/api/")) {
+			await ensureBootstrapped();
 		}
 
 		// --- Jobs CRUD ---
@@ -3463,166 +3560,110 @@ const server = createServer(async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// Start
+// Terminal WebSocket setup (the bindTerminalWs helper references the lazy
+// terminalManager, but the upgrade handler only fires AFTER the first successful
+// bootstrap — terminal WebSocket connections can't happen before then).
 // ---------------------------------------------------------------------------
 
-console.log("[inno-server] initializing agent session...");
-initSession(config, paths, channelRegistry, {
-	sandbox: parsed.options.sandbox,
-	extensionDeps: {
-		workspaceRegistry,
-		runRecordStore,
-		getCurrentSessionId,
-		recordChannelInteraction: (channel) => recordCurrentSessionChannel(channel as SessionChannel),
-	},
-})
-	.then(() => {
-		// Create dispatcher now that agent session is ready
-		const channelsDataDir = join(dataDir, "channels");
-		ensureDir(channelsDataDir);
-		dispatcher = new PersonalChannelDispatcher({
-			channelRegistry,
-			runPrompt: runPromptSerialized,
-			runPromptInSession,
-			createNewSession,
-			getCurrentSessionId,
-			recordSessionChannel: (ch, sid?) => recordCurrentSessionChannel(ch as SessionChannel, sid, { setOriginIfEmpty: true }),
-			maybeAutoGenerateTopic,
-			onSessionCreated: (sessionId, channel) => {
-				// Channel-originated sessions bind to a fixed per-channel workspace
-				// (they cannot prompt the user to choose one).
-				try {
-					const ws = workspaceRegistry.ensureChannelWorkspace(channel);
-					workspaceRegistry.bindSession(sessionId, ws.id);
-				} catch (err) {
-					console.warn(`[sessions] failed to bind channel session ${sessionId}:`, err instanceof Error ? err.message : err);
-				}
-			},
-			channelsDataDir,
-			sessionDir: join(dataDir, "sessions"),
-		});
-
-		// Start Feishu WebSocket if enabled
-		if (feishuChannel) {
-			feishuChannel.onMessage((msg) => dispatcher!.handle(feishuChannel!, msg));
-			feishuChannel.start();
-		}
-
-		// Start WeChat iLink if logged in
-		if (wechatChannel) {
-			wechatChannel.onMessage((msg) => dispatcher!.handle(wechatChannel!, msg));
-			wechatChannel.start();
-		}
-
-		// Start cron scheduler
-		const scheduler = new CronScheduler(jobStore, channelRegistry);
-		scheduler.start();
-
-		// --- WebSocket: terminal sessions ---
-		const wss = new WebSocketServer({ noServer: true });
-		server.on("upgrade", (req, socket, head) => {
-			const url = req.url ?? "";
-			const m = /^\/api\/terminal\/sessions\/([^/?]+)\/ws$/.exec(url.split("?")[0]);
-			if (!m) {
-				socket.destroy();
-				return;
-			}
-			const terminalId = decodeURIComponent(m[1]);
-			const ts = terminalManager.get(terminalId);
-			if (!ts) {
-				socket.destroy();
-				return;
-			}
-			wss.handleUpgrade(req, socket, head, (ws) => {
-				bindTerminalWs(ws, terminalId);
-			});
-		});
-
-		function send(ws: WebSocket, event: ServerTerminalEvent): void {
-			if (ws.readyState === ws.OPEN) {
-				ws.send(JSON.stringify(event));
-			}
-		}
-
-		function bindTerminalWs(ws: WebSocket, terminalId: string): void {
-			const ts = terminalManager.get(terminalId);
-			if (!ts) {
-				send(ws, { type: "error", message: "Terminal not found" });
-				ws.close();
-				return;
-			}
-
-			send(ws, { type: "ready", sessionId: ts.sessionId, cwd: ts.cwd, workspaceId: ts.workspaceId });
-
-			const offData = ts.pty.onData((chunk: string) => {
-				const { cleaned, finishedRun } = terminalManager.processOutput(ts, chunk);
-				if (cleaned) {
-					terminalManager.recordOutput(ts, cleaned);
-					send(ws, { type: "output", data: cleaned });
-				}
-				if (finishedRun) {
-					const run = terminalManager.finishActiveRun(ts, finishedRun.exitCode);
-					send(ws, { type: "exit", code: finishedRun.exitCode, runId: run?.id });
-				}
-			});
-			const offExit = ts.pty.onExit(({ exitCode, signal }) => {
-				const run = terminalManager.finishActiveRun(ts, exitCode, signal ? String(signal) : undefined);
-				send(ws, { type: "exit", code: exitCode, signal: signal ? String(signal) : undefined, runId: run?.id });
-				ws.close();
-			});
-
-			ws.on("message", (raw) => {
-				let event: ClientTerminalEvent;
-				try {
-					event = JSON.parse(raw.toString()) as ClientTerminalEvent;
-				} catch {
-					send(ws, { type: "error", message: "Invalid JSON" });
-					return;
-				}
-				switch (event.type) {
-					case "input":
-						if (typeof event.data === "string") ts.pty.write(event.data);
-						break;
-					case "resize":
-						if (typeof event.cols === "number" && typeof event.rows === "number") {
-							ts.pty.resize(event.cols, event.rows);
-						}
-						break;
-					case "run": {
-						if (typeof event.command !== "string" || !event.command.trim()) break;
-						if (event.command.length > 4096) {
-							send(ws, { type: "error", message: "Command too long" });
-							break;
-						}
-						const record = terminalManager.startRun(ts, event.command, event.sourceFile);
-						send(ws, { type: "run_started", runId: record.id, command: event.command });
-						break;
-					}
-					case "close":
-						ws.close();
-						break;
-				}
-			});
-
-			ws.on("close", () => {
-				offData();
-				offExit();
-				// Mark any in-flight run as unfinished but recorded.
-				terminalManager.finishActiveRun(ts, null);
-			});
-		}
-
-		server.listen(port, () => {
-			console.log(`[inno-server] listening on http://localhost:${port}`);
-			console.log(`[inno-server] config: ${paths.configPath}`);
-			console.log(`[inno-server] data: ${paths.dataDir}`);
-			console.log(`[inno-server] skills: ${paths.skillsDir}`);
-			console.log(`[inno-server] workspace: ${paths.workspaceDir}`);
-			console.log(`[inno-server] channels: ${channelRegistry.all().map((c) => c.name).join(", ") || "none"}`);
-			console.log(`[inno-server] jobs loaded: ${jobStore.list().length}`);
-		});
-	})
-	.catch((err) => {
-		console.error("[inno-server] failed to initialize:", err);
-		process.exit(1);
+const wss = new WebSocketServer({ noServer: true });
+server.on("upgrade", (req, socket, head) => {
+	const url = req.url ?? "";
+		if (!bootstrapped) { socket.destroy(); return; }
+	const m = /^\/api\/terminal\/sessions\/([^/?]+)\/ws$/.exec(url.split("?")[0]);
+	if (!m) {
+		socket.destroy();
+		return;
+	}
+	const terminalId = decodeURIComponent(m[1]);
+	const ts = terminalManager.get(terminalId);
+	if (!ts) {
+		socket.destroy();
+		return;
+	}
+	wss.handleUpgrade(req, socket, head, (ws) => {
+		bindTerminalWs(ws, terminalId);
 	});
+});
+
+function sendTerminal(ws: WebSocket, event: ServerTerminalEvent): void {
+	if (ws.readyState === ws.OPEN) {
+		ws.send(JSON.stringify(event));
+	}
+}
+
+function bindTerminalWs(ws: WebSocket, terminalId: string): void {
+	const ts = terminalManager.get(terminalId);
+	if (!ts) {
+		sendTerminal(ws, { type: "error", message: "Terminal not found" });
+		ws.close();
+		return;
+	}
+
+	sendTerminal(ws, { type: "ready", sessionId: ts.sessionId, cwd: ts.cwd, workspaceId: ts.workspaceId });
+
+	const offData = ts.pty.onData((chunk: string) => {
+		const { cleaned, finishedRun } = terminalManager.processOutput(ts, chunk);
+		if (cleaned) {
+			terminalManager.recordOutput(ts, cleaned);
+			sendTerminal(ws, { type: "output", data: cleaned });
+		}
+		if (finishedRun) {
+			const run = terminalManager.finishActiveRun(ts, finishedRun.exitCode);
+			sendTerminal(ws, { type: "exit", code: finishedRun.exitCode, runId: run?.id });
+		}
+	});
+	const offExit = ts.pty.onExit(({ exitCode, signal }) => {
+		const run = terminalManager.finishActiveRun(ts, exitCode, signal ? String(signal) : undefined);
+		sendTerminal(ws, { type: "exit", code: exitCode, signal: signal ? String(signal) : undefined, runId: run?.id });
+		ws.close();
+	});
+
+	ws.on("message", (raw) => {
+		let event: ClientTerminalEvent;
+		try {
+			event = JSON.parse(raw.toString()) as ClientTerminalEvent;
+		} catch {
+			sendTerminal(ws, { type: "error", message: "Invalid JSON" });
+			return;
+		}
+		switch (event.type) {
+			case "input":
+				if (typeof event.data === "string") ts.pty.write(event.data);
+				break;
+			case "resize":
+				if (typeof event.cols === "number" && typeof event.rows === "number") {
+					ts.pty.resize(event.cols, event.rows);
+				}
+				break;
+			case "run": {
+				if (typeof event.command !== "string" || !event.command.trim()) break;
+				if (event.command.length > 4096) {
+					sendTerminal(ws, { type: "error", message: "Command too long" });
+					break;
+				}
+				const record = terminalManager.startRun(ts, event.command, event.sourceFile);
+				sendTerminal(ws, { type: "run_started", runId: record.id, command: event.command });
+				break;
+			}
+			case "close":
+				ws.close();
+				break;
+		}
+	});
+
+	ws.on("close", () => {
+		offData();
+		offExit();
+		terminalManager.finishActiveRun(ts, null);
+	});
+}
+
+// ---------------------------------------------------------------------------
+// Start listening immediately — /health and static files work right away.
+// All other endpoints call ensureBootstrapped() lazily on first request.
+// ---------------------------------------------------------------------------
+
+server.listen(port, () => {
+	console.log(`[inno-server] listening on http://localhost:${port}`);
+	console.log(`[inno-server] config: ${paths.configPath}`);
+});
