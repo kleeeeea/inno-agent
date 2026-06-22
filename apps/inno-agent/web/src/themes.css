@@ -95,3 +95,34 @@
 	--inno-grid-color: rgba(13, 148, 136, 0.035);
 	color-scheme: light;
 }
+
+/* ─── InnoSpark / 启创 ─── */
+:root[data-theme="innospark"] {
+	--inno-background: #f7f7fa;
+	--inno-surface: #ffffff;
+	--inno-surface-muted: #f1f1ff;
+	--inno-surface-raised: #fbfbff;
+	--inno-sidebar-bg: #f3f3f7;
+	--inno-sidebar-active: #ffffff;
+	--inno-chat-bg: #ffffff;
+	--inno-workspace-bg: #fbfbff;
+	--inno-workspace-chrome: #f5f5fb;
+	--inno-border: #e5e4f4;
+	--inno-border-strong: #d2d0ec;
+	--inno-text: #191922;
+	--inno-text-muted: #545469;
+	--inno-text-subtle: #9d9da9;
+	--inno-accent: #555aff;
+	--inno-accent-soft: #edeeff;
+	--inno-tech: #7c5cff;
+	--inno-success: #22a06b;
+	--inno-warning: #d99a08;
+	--inno-danger: #dc2626;
+	--inno-shadow-soft: 0 1px 2px rgba(85, 90, 255, 0.08), 0 14px 34px rgba(85, 90, 255, 0.12);
+	--inno-ring: 0 0 0 3px rgba(85, 90, 255, 0.18);
+	--inno-scrollbar-thumb: rgba(85, 90, 255, 0.16);
+	--inno-scrollbar-thumb-hover: rgba(85, 90, 255, 0.28);
+	--inno-selection-bg: rgba(85, 90, 255, 0.16);
+	--inno-grid-color: rgba(85, 90, 255, 0.028);
+	color-scheme: light;
+}

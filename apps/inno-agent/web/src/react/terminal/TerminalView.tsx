@@ -46,6 +46,15 @@ const TERMINAL_THEMES: Record<ThemeId, ITheme> = {
 		brightYellow: "#f59e0b", brightBlue: "#06b6d4", brightMagenta: "#a855f7",
 		brightCyan: "#14b8a6", brightWhite: "#1a2c3d",
 	},
+	innospark: {
+		background: "#ffffff", foreground: "#191922", cursor: "#555aff",
+		cursorAccent: "#ffffff", selectionBackground: "#edeeff",
+		black: "#191922", red: "#dc2626", green: "#22a06b", yellow: "#d99a08",
+		blue: "#555aff", magenta: "#7c5cff", cyan: "#6a7cff", white: "#545469",
+		brightBlack: "#9d9da9", brightRed: "#ef4444", brightGreen: "#2bbf7b",
+		brightYellow: "#f5b62f", brightBlue: "#6b70ff", brightMagenta: "#8b70ff",
+		brightCyan: "#8291ff", brightWhite: "#191922",
+	},
 };
 
 /**

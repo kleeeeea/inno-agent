@@ -107,16 +107,16 @@ function orderedSessionChannels(session: SessionMeta): Array<{ channel: SessionC
 
 function channelFilterClass(channel: SessionChannel | null, active: boolean): string {
 	if (!active) return "bg-[var(--inno-surface)] text-[var(--inno-text-muted)] ring-1 ring-slate-200 hover:bg-[var(--inno-surface-muted)] hover:text-[var(--inno-text)] hover:ring-slate-300";
-	if (!channel) return "bg-slate-800 text-white ring-1 ring-slate-800";
+	if (!channel) return "bg-slate-800 text-white ring-1 ring-slate-800 hover:bg-slate-800 hover:text-white";
 	const map: Record<string, string> = {
-		cli: "bg-[var(--inno-accent)] text-white ring-1 ring-blue-600",
-		web: "bg-slate-900 text-white ring-1 ring-slate-900",
-		feishu: "bg-emerald-600 text-white ring-1 ring-emerald-600",
-		scheduler: "bg-amber-600 text-white ring-1 ring-amber-600",
-		qq: "bg-cyan-600 text-white ring-1 ring-cyan-600",
-		wechat: "bg-lime-600 text-white ring-1 ring-lime-600",
+		cli: "bg-[var(--inno-accent)] text-white ring-1 ring-blue-600 hover:bg-[var(--inno-accent)] hover:text-white",
+		web: "bg-slate-900 text-white ring-1 ring-slate-900 hover:bg-slate-900 hover:text-white",
+		feishu: "bg-emerald-600 text-white ring-1 ring-emerald-600 hover:bg-emerald-600 hover:text-white",
+		scheduler: "bg-amber-600 text-white ring-1 ring-amber-600 hover:bg-amber-600 hover:text-white",
+		qq: "bg-cyan-600 text-white ring-1 ring-cyan-600 hover:bg-cyan-600 hover:text-white",
+		wechat: "bg-lime-600 text-white ring-1 ring-lime-600 hover:bg-lime-600 hover:text-white",
 	};
-	return map[channel] ?? "bg-slate-700 text-white ring-1 ring-slate-700";
+	return map[channel] ?? "bg-slate-700 text-white ring-1 ring-slate-700 hover:bg-slate-700 hover:text-white";
 }
 
 /* ── Workspace group definition ── */
@@ -853,14 +853,14 @@ export function SessionSidebar({ collapsed }: SessionSidebarProps) {
 						{orderedChannels.map((ch) => (
 							<button
 								key={ch}
-								className={`inno-sidebar-meta rounded-full px-1.5 py-px font-medium transition-colors ${channelFilterClass(ch, state.channelFilter === ch)}`}
+								className={`inno-channel-filter-chip inno-sidebar-meta rounded-full px-1.5 py-px font-medium transition-colors ${channelFilterClass(ch, state.channelFilter === ch)}`}
 								onClick={() => sessionsStore.setChannelFilter(state.channelFilter === ch ? null : ch)}
 							>
 								{channelLabel(ch)}
 							</button>
 						))}
 						<button
-							className={`inno-sidebar-meta rounded-full px-1.5 py-px font-medium transition-colors ${channelFilterClass(null, state.channelFilter === null)}`}
+							className={`inno-channel-filter-chip inno-sidebar-meta rounded-full px-1.5 py-px font-medium transition-colors ${channelFilterClass(null, state.channelFilter === null)}`}
 							onClick={() => sessionsStore.setChannelFilter(null)}
 						>
 							全部

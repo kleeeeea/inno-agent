@@ -3413,7 +3413,7 @@ const server = createServer(async (req, res) => {
 		if (method === "PUT" && url === "/api/settings/theme") {
 			const body = (await readBody(req)) as Record<string, unknown>;
 			const theme = typeof body.theme === "string" ? body.theme.trim() : "";
-			const ALLOWED_THEMES = ["light", "warm", "ocean"];
+			const ALLOWED_THEMES = ["light", "warm", "ocean", "innospark"];
 			if (!ALLOWED_THEMES.includes(theme)) {
 				json(res, 400, { error: `Invalid theme. Allowed: ${ALLOWED_THEMES.join(", ")}` });
 				return;

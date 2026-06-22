@@ -394,7 +394,8 @@
 		"themeOptions": {
 			"light": "Light",
 			"warm": "Warm",
-			"ocean": "Ocean"
+			"ocean": "Ocean",
+			"innospark": "InnoSpark"
 		},
 		"channels": {
 			"title": "Channels",

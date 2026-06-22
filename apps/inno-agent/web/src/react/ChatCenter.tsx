@@ -135,25 +135,25 @@ function MessageBubble({ message, showChannel }: { message: ChatMessage; showCha
 			animate={{ opacity: 1, y: 0 }}
 			transition={{ duration: 0.25, ease: "easeOut" }}
 		>
-			<div className="inno-message max-w-[78%] rounded-lg border border-[var(--inno-border)] bg-[var(--inno-surface)] px-3.5 py-2.5 text-[13px] leading-relaxed text-[var(--inno-text)]">
+			<div className="inno-message min-w-0 max-w-[78%] overflow-hidden rounded-lg border border-[var(--inno-border)] bg-[var(--inno-surface)] px-3.5 py-2.5 text-[13px] leading-relaxed text-[var(--inno-text)]">
 				{showChannel && message.channel ? (
 					<div className="mb-1"><ChannelBadge channel={message.channel} /></div>
 				) : null}
 				{message.thinking || message.tools?.length ? (
-					<details className="mb-2 rounded-md border border-[var(--inno-border)] bg-[var(--inno-surface-muted)] px-2 py-1.5 text-xs text-[var(--inno-text-muted)]">
-						<summary className="cursor-pointer select-none font-medium text-[var(--inno-text-muted)]">
+					<details className="mb-2 min-w-0 max-w-full overflow-hidden rounded-md border border-[var(--inno-border)] bg-[var(--inno-surface-muted)] px-2 py-1.5 text-xs text-[var(--inno-text-muted)]">
+						<summary className="cursor-pointer select-none break-words font-medium text-[var(--inno-text-muted)] [overflow-wrap:anywhere]">
 							Thinking & tool calls
 							{message.tools?.length ? ` · ${message.tools.length}` : ""}
 						</summary>
-						{message.thinking ? <pre className="mt-2 max-h-44 overflow-auto whitespace-pre-wrap font-mono">{message.thinking}</pre> : null}
+						{message.thinking ? <pre className="mt-2 max-h-44 max-w-full overflow-auto whitespace-pre-wrap break-words font-mono [overflow-wrap:anywhere]">{message.thinking}</pre> : null}
 						{message.tools?.length ? (
-							<div className="mt-2 grid gap-1.5">
+							<div className="mt-2 grid min-w-0 max-w-full gap-1.5">
 								{message.tools.map((tool) => (
-									<details key={tool.toolCallId} className="rounded border border-[var(--inno-border)] bg-[var(--inno-surface)] px-2 py-1">
-										<summary className={tool.isError ? "cursor-pointer text-red-600" : "cursor-pointer text-[var(--inno-text-muted)]"}>
+									<details key={tool.toolCallId} className="min-w-0 max-w-full overflow-hidden rounded border border-[var(--inno-border)] bg-[var(--inno-surface)] px-2 py-1">
+										<summary className={tool.isError ? "cursor-pointer break-words text-red-600 [overflow-wrap:anywhere]" : "cursor-pointer break-words text-[var(--inno-text-muted)] [overflow-wrap:anywhere]"}>
 											{tool.toolName}
 										</summary>
-										<pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap font-mono text-[11px]">{JSON.stringify({ args: tool.args, result: tool.result }, null, 2)}</pre>
+										<pre className="mt-1 max-h-40 max-w-full overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] [overflow-wrap:anywhere]">{JSON.stringify({ args: tool.args, result: tool.result }, null, 2)}</pre>
 									</details>
 								))}
 							</div>
@@ -745,7 +745,7 @@ export function ChatCenter() {
 				ref={scrollRef}
 				className="chat-scroll inno-chat-grid flex-1 min-h-0 overflow-y-auto px-4 py-4"
 			>
-				<div className="mx-auto flex max-w-3xl flex-col gap-3">
+				<div className="mx-auto flex min-w-0 max-w-3xl flex-col gap-3">
 					{chat.isLoadingHistory && chat.messages.length === 0 ? (
 						<div className="flex h-full flex-col items-center justify-center pt-20 text-[var(--inno-text-muted)]">
 							<span className="mb-3 inline-block h-5 w-5 animate-spin rounded-full border-2 border-slate-400 border-t-transparent" />
@@ -768,11 +768,11 @@ export function ChatCenter() {
 							animate={{ opacity: 1, y: 0 }}
 							transition={{ duration: 0.2, ease: "easeOut" }}
 						>
-							<div className="inno-message max-w-[78%] rounded-lg border border-blue-100 bg-[var(--inno-accent-soft)] px-3 py-2 text-[13px]">
+							<div className="inno-message min-w-0 max-w-[78%] overflow-hidden rounded-lg border border-blue-100 bg-[var(--inno-accent-soft)] px-3 py-2 text-[13px]">
 								{chat.activeTools.map((tool) => (
-									<div key={tool.toolCallId} className="flex items-center gap-2 text-[var(--inno-text-muted)]">
-										<span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-										<span className="font-mono text-xs">{tool.toolName}</span>
+									<div key={tool.toolCallId} className="flex min-w-0 items-center gap-2 text-[var(--inno-text-muted)]">
+										<span className="inline-block h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent" />
+										<span className="min-w-0 break-words font-mono text-xs [overflow-wrap:anywhere]">{tool.toolName}</span>
 									</div>
 								))}
 							</div>
@@ -786,9 +786,9 @@ export function ChatCenter() {
 							animate={{ opacity: 1, y: 0 }}
 							transition={{ duration: 0.2, ease: "easeOut" }}
 						>
-							<details className="inno-message max-w-[78%] rounded-lg border border-[var(--inno-border)] bg-[var(--inno-surface)] px-3 py-2 text-xs text-[var(--inno-text-muted)]">
-								<summary className="cursor-pointer">Thinking...</summary>
-								<pre className="mt-1 whitespace-pre-wrap font-mono">{chat.streamingThinking}</pre>
+							<details className="inno-message min-w-0 max-w-[78%] overflow-hidden rounded-lg border border-[var(--inno-border)] bg-[var(--inno-surface)] px-3 py-2 text-xs text-[var(--inno-text-muted)]">
+								<summary className="cursor-pointer break-words [overflow-wrap:anywhere]">Thinking...</summary>
+								<pre className="mt-1 max-w-full overflow-auto whitespace-pre-wrap break-words font-mono [overflow-wrap:anywhere]">{chat.streamingThinking}</pre>
 							</details>
 						</motion.div>
 					) : null}
@@ -800,13 +800,13 @@ export function ChatCenter() {
 							animate={{ opacity: 1 }}
 							transition={{ duration: 0.2 }}
 						>
-							<details className="inno-message max-w-[78%] rounded-lg border border-[var(--inno-border)] bg-[var(--inno-surface)] px-3 py-2 text-xs text-[var(--inno-text-muted)]">
-								<summary className="cursor-pointer">Completed tool calls · {chat.completedTools.length}</summary>
-								<div className="mt-2 grid gap-1.5">
+							<details className="inno-message min-w-0 max-w-[78%] overflow-hidden rounded-lg border border-[var(--inno-border)] bg-[var(--inno-surface)] px-3 py-2 text-xs text-[var(--inno-text-muted)]">
+								<summary className="cursor-pointer break-words [overflow-wrap:anywhere]">Completed tool calls · {chat.completedTools.length}</summary>
+								<div className="mt-2 grid min-w-0 max-w-full gap-1.5">
 									{chat.completedTools.map((tool) => (
-										<details key={tool.toolCallId} className="rounded border border-[var(--inno-border)] bg-[var(--inno-surface-muted)] px-2 py-1">
-											<summary className={tool.isError ? "cursor-pointer text-red-600" : "cursor-pointer text-[var(--inno-text-muted)]"}>{tool.toolName}</summary>
-											<pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap font-mono text-[11px]">{JSON.stringify({ args: tool.args, result: tool.result }, null, 2)}</pre>
+										<details key={tool.toolCallId} className="min-w-0 max-w-full overflow-hidden rounded border border-[var(--inno-border)] bg-[var(--inno-surface-muted)] px-2 py-1">
+											<summary className={tool.isError ? "cursor-pointer break-words text-red-600 [overflow-wrap:anywhere]" : "cursor-pointer break-words text-[var(--inno-text-muted)] [overflow-wrap:anywhere]"}>{tool.toolName}</summary>
+											<pre className="mt-1 max-h-40 max-w-full overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] [overflow-wrap:anywhere]">{JSON.stringify({ args: tool.args, result: tool.result }, null, 2)}</pre>
 										</details>
 									))}
 								</div>
