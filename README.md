@@ -278,6 +278,16 @@ Issues and PRs are welcome. Before opening a PR, please run `npm run build` loca
 
 ---
 
+## Community
+
+Join the WeChat user group to ask questions, share use cases, and follow updates. Scan the QR code below:
+
+<p align="center">
+  <img src="./docs/assets/wechat-community-qr.jpg" alt="Inno Agent WeChat community group QR code" width="240" />
+</p>
+
+---
+
 ## License
 
 [MIT](./LICENSE).
