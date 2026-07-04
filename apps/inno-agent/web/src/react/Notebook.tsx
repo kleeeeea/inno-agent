@@ -112,7 +112,7 @@ export function Notebook() {
 										void handleDelete(page.path, title);
 									}}
 								>
-									<Trash2 size={13} />
+									<Trash2 size={14} />
 								</button>
 							</div>
 						);
@@ -128,7 +128,7 @@ export function Notebook() {
 							onClick={() => setSidebarOpen((v) => !v)}
 							title={sidebarOpen ? t("common.collapseSidebar", "Collapse sidebar") : t("common.expandSidebar", "Expand sidebar")}
 						>
-							{sidebarOpen ? <PanelLeftClose size={15} /> : <PanelLeftOpen size={15} />}
+							{sidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
 						</button>
 						<div className="inline-flex rounded-md border border-[var(--inno-border)] bg-[var(--inno-surface-muted)] p-0.5 text-xs">
 							<button
@@ -136,7 +136,7 @@ export function Notebook() {
 								onClick={() => notebookStore.setView("graph")}
 								title={t("notebook.view.graph")}
 							>
-								<Network size={13} />
+								<Network size={14} />
 								<span className="hidden @[680px]:inline">{t("notebook.view.graph")}</span>
 							</button>
 							<button
@@ -144,7 +144,7 @@ export function Notebook() {
 								onClick={() => notebookStore.setView("page")}
 								title={t("notebook.view.page")}
 							>
-								<FileText size={13} />
+								<FileText size={14} />
 								<span className="hidden @[680px]:inline">{t("notebook.view.page")}</span>
 							</button>
 						</div>

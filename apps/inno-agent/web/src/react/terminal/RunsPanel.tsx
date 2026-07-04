@@ -119,7 +119,7 @@ export function RunsPanel({ sessionId, onClose }: RunsPanelProps) {
 									<div className="truncate font-mono text-[var(--inno-text)]" title={r.command}>{r.command}</div>
 									<div className="truncate text-[10px] text-[var(--inno-text-subtle)]">{formatTime(r.startedAt)} · {formatDuration(r.startedAt, r.endedAt)}{r.sourceFile ? ` · ${r.sourceFile}` : ""}</div>
 								</div>
-								<ChevronRight size={10} className="mt-0.5 shrink-0 text-[var(--inno-text-subtle)]" />
+								<ChevronRight size={12} className="mt-0.5 shrink-0 text-[var(--inno-text-subtle)]" />
 							</button>
 						);
 					})}
@@ -142,7 +142,7 @@ export function RunsPanel({ sessionId, onClose }: RunsPanelProps) {
 									disabled={archiveBusy}
 									className="flex h-6 items-center gap-1 rounded-md inno-primary-button px-2 text-[11px] font-medium text-white transition-colors disabled:opacity-50"
 								>
-									<Archive size={11} />
+									<Archive size={12} />
 									{archiveBusy ? "归档中…" : "归档为笔记"}
 								</button>
 								{archiveMsg ? <span className="text-[10px] text-[var(--inno-text-muted)]">{archiveMsg}</span> : null}

@@ -27,6 +27,7 @@ import { normalizeMarkdownMath } from "../utils/markdown-math.js";
 import { groupByCategory, matchesQuery } from "../utils/category-grouping.js";
 import { useStoreSnapshot } from "./hooks.js";
 import { checkboxCls } from "./ui/checkbox.js";
+import { Spinner } from "./ui/Spinner.js";
 import "@earendil-works/pi-web-ui";
 import "@uiw/react-md-editor/markdown-editor.css";
 import "@uiw/react-markdown-preview/markdown.css";
@@ -119,7 +120,7 @@ function FilePreview({ file, skillName, isLoading }: { file: WorkspaceFileDetail
 					className="mt-2 flex items-center gap-1.5 rounded-md border border-[var(--inno-border)] px-3 py-1.5 text-xs text-[var(--inno-text-muted)] hover:bg-[var(--inno-surface-muted)]"
 					onClick={() => skillsStore.openAsText()}
 				>
-					<FileCode2 size={13} />
+					<FileCode2 size={14} />
 					{t("preview.openAsText", "Open as Text")}
 				</button>
 			</div>
@@ -196,7 +197,7 @@ function SkillFilePane({ skillName, onToggleSidebar, sidebarOpen }: { skillName:
 				<div className="flex h-10 items-center justify-between border-b border-[var(--inno-border)] bg-[var(--inno-surface)] px-3">
 					<div className="flex min-w-0 flex-1 items-center gap-2">
 						<button className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[var(--inno-text-subtle)] hover:bg-[var(--inno-surface-muted)] hover:text-[var(--inno-text)]" onClick={onToggleSidebar}>
-							{sidebarOpen ? <PanelLeftClose size={15} /> : <PanelLeftOpen size={15} />}
+							{sidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
 						</button>
 						<div className="min-w-0">
 							<div className="truncate text-sm font-medium">{state.file.name}</div>
@@ -232,7 +233,7 @@ function SkillFilePane({ skillName, onToggleSidebar, sidebarOpen }: { skillName:
 			<div className="flex h-10 items-center justify-between border-b border-[var(--inno-border)] bg-[var(--inno-surface)] px-3">
 				<div className="flex min-w-0 flex-1 items-center gap-2">
 					<button className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[var(--inno-text-subtle)] hover:bg-[var(--inno-surface-muted)] hover:text-[var(--inno-text)]" onClick={onToggleSidebar}>
-						{sidebarOpen ? <PanelLeftClose size={15} /> : <PanelLeftOpen size={15} />}
+						{sidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
 					</button>
 					<div className="min-w-0">
 						<div className="truncate text-sm font-medium">{state.file?.name ?? t("preview.noFile", "No file selected")}</div>
@@ -326,7 +327,7 @@ function SkillDetail({ skill, onBack }: { skill: SkillInfo; onBack: () => void }
 				<div ref={treeContainerRef} className="min-h-0 flex-1 overflow-hidden">
 					{state.isLoadingTree && !arboristData.length ? (
 						<div className="flex items-center justify-center py-8 text-[var(--inno-text-muted)]">
-							<span className="mr-2 inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+							<Spinner size={16} className="mr-2" />
 						</div>
 					) : !arboristData.length ? (
 						<div className="p-3 text-xs text-[var(--inno-text-muted)]">{t("preview.empty", "Empty")}</div>
@@ -451,7 +452,7 @@ function SkillLibraryModal({ onClose }: { onClose: () => void }) {
 				<div className="min-h-0 flex-1 overflow-y-auto">
 					{state.isLoading ? (
 						<div className="flex items-center justify-center py-12 text-[var(--inno-text-muted)]">
-							<span className="mr-2 inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+							<Spinner size={16} className="mr-2" />
 							{t("common.loading")}
 						</div>
 					) : state.library.length === 0 ? (
@@ -558,14 +559,14 @@ export function SkillsPanel() {
 					<div className="flex shrink-0 items-center gap-1.5">
 						<input ref={uploadRef} type="file" className="hidden" accept=".zip,application/zip,.md,text/markdown,text/plain" onChange={handleUpload} />
 						<button className="flex h-7 items-center gap-1 rounded-md border border-[var(--inno-border)] px-2 text-xs text-[var(--inno-text-muted)] hover:bg-[var(--inno-surface-muted)] hover:text-[var(--inno-text)]" title={t("skills.library")} onClick={() => skillsStore.openLibrary()}>
-							<Library size={13} />
+							<Library size={14} />
 							<span className="hidden @[26rem]/skillspanel:inline">{t("skills.library")}</span>
 						</button>
 						<button className="flex h-7 w-7 items-center justify-center rounded-md border border-[var(--inno-border)] text-[var(--inno-text-muted)] hover:bg-[var(--inno-surface-muted)] hover:text-[var(--inno-text)]" title={t("preview.refresh", "Refresh")} onClick={() => void skillsStore.reload()}>
-							<RefreshCw size={13} />
+							<RefreshCw size={14} />
 						</button>
 						<button className="flex h-7 items-center gap-1 rounded-md inno-primary-button px-2 text-xs text-white disabled:opacity-50" disabled={state.isUploading} title={state.isUploading ? t("skills.uploading") : t("skills.upload")} onClick={() => uploadRef.current?.click()}>
-							<Upload size={13} />
+							<Upload size={14} />
 							<span className="hidden @[26rem]/skillspanel:inline">{state.isUploading ? t("skills.uploading") : t("skills.upload")}</span>
 						</button>
 					</div>
@@ -574,7 +575,7 @@ export function SkillsPanel() {
 				{/* Search (visible when there's anything to search through) */}
 				{state.skills.length > 0 ? (
 					<div className="flex items-center gap-2 border-b border-[var(--inno-border)] px-3 py-2">
-						<Search size={13} className="shrink-0 text-[var(--inno-text-subtle)]" />
+						<Search size={14} className="shrink-0 text-[var(--inno-text-subtle)]" />
 						<input
 							type="text"
 							value={query}
@@ -600,7 +601,7 @@ export function SkillsPanel() {
 				<div className="min-h-0 flex-1 overflow-y-auto">
 					{state.isLoading ? (
 						<div className="flex items-center justify-center py-8 text-[var(--inno-text-muted)]">
-							<span className="mr-2 inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+							<Spinner size={16} className="mr-2" />
 							{t("common.loading")}
 						</div>
 					) : state.skills.length === 0 ? (

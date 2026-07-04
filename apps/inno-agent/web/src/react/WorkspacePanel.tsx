@@ -24,12 +24,12 @@ interface WorkspacePanelProps {
 const TAB_ORDER: RightPanelTab[] = ["preview", "notebook", "profile", "jobs", "skills", "settings"];
 
 const TAB_ICONS: Record<RightPanelTab, React.ReactNode> = {
-	notebook: <BookOpen size={13} />,
-	preview: <FolderKanban size={13} />,
-	profile: <UserRound size={13} />,
-	jobs: <BriefcaseBusiness size={13} />,
-	skills: <Sparkles size={13} />,
-	settings: <Settings size={13} />,
+	notebook: <BookOpen size={14} />,
+	preview: <FolderKanban size={14} />,
+	profile: <UserRound size={14} />,
+	jobs: <BriefcaseBusiness size={14} />,
+	skills: <Sparkles size={14} />,
+	settings: <Settings size={14} />,
 };
 
 function WorkspaceContent({ activeTab }: { activeTab: RightPanelTab }) {

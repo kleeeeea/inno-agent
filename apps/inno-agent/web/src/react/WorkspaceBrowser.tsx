@@ -338,7 +338,7 @@ function Preview({ file, isLoading }: { file: WorkspaceFileDetail; isLoading: bo
 					className="mt-2 flex items-center gap-1.5 rounded-md border border-[var(--inno-border)] px-3 py-1.5 text-xs text-[var(--inno-text-muted)] hover:bg-[var(--inno-surface-muted)]"
 					onClick={() => workspaceStore.openAsText()}
 				>
-					<FileCode2 size={13} />
+					<FileCode2 size={14} />
 					{t("preview.openAsText", "Open as Text")}
 				</button>
 			</div>
@@ -467,7 +467,7 @@ function FileContentPane({ onToggleSidebar, sidebarOpen }: { onToggleSidebar: ()
 						onClick={onToggleSidebar}
 						title={sidebarOpen ? t("common.collapseSidebar", "Collapse sidebar") : t("common.expandSidebar", "Expand sidebar")}
 					>
-						{sidebarOpen ? <PanelLeftClose size={15} /> : <PanelLeftOpen size={15} />}
+						{sidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
 					</button>
 					<div className="min-w-0">
 						<div className="truncate text-sm font-medium">{state.file?.name ?? t("preview.noFile", "No file selected")}</div>
@@ -847,10 +847,10 @@ export function WorkspaceBrowser() {
 						</span>
 					</div>
 					<button disabled={busy} className="flex h-6 w-6 items-center justify-center rounded text-[var(--inno-text-subtle)] transition-colors hover:bg-[var(--inno-surface-muted)] hover:text-[var(--inno-accent)] disabled:opacity-40" title={t("files.uploadSkill", "上传技能包 (.zip/.md) 到 .skills")} onClick={() => skillUploadRef.current?.click()}>
-						<Sparkles size={13} />
+						<Sparkles size={14} />
 					</button>
 					<button disabled={busy} className="flex h-6 w-6 items-center justify-center rounded text-[var(--inno-text-subtle)] transition-colors hover:bg-[var(--inno-surface-muted)] hover:text-[var(--inno-text)] disabled:opacity-40" title={t("preview.refresh", "Refresh")} onClick={() => void workspaceStore.loadTree()}>
-						<RefreshCw size={13} />
+						<RefreshCw size={14} />
 					</button>
 					<input ref={skillUploadRef} type="file" multiple accept=".zip,application/zip,.md,text/markdown" className="hidden" onChange={handleSkillUploadChange} />
 				</div>

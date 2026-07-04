@@ -6,6 +6,7 @@ import { jobsStore } from "../stores/jobs-store.js";
 import type { CreateJobInput, ScheduledJob, TaskType } from "../types/jobs.js";
 import { useStoreSnapshot } from "./hooks.js";
 import { checkboxCls } from "./ui/checkbox.js";
+import { Spinner } from "./ui/Spinner.js";
 import { ScheduleEditor } from "./jobs/ScheduleEditor.js";
 import {
 	DEFAULT_SCHEDULE,
@@ -181,7 +182,7 @@ export function JobsPanel() {
 				<div className="min-h-0 flex-1 overflow-y-auto p-3">
 					{state.isLoading ? (
 						<div className="flex items-center justify-center py-8 text-[var(--inno-text-muted)]">
-							<span className="mr-2 inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+							<Spinner size={16} className="mr-2" />
 							{t("common.loading")}
 						</div>
 					) : null}

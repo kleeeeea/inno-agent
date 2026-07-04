@@ -24,6 +24,7 @@ import { settingsStore } from "../stores/settings-store.js";
 import type { WorkspaceMeta } from "../api/workspaces.js";
 import type { SessionChannel, SessionMeta } from "../api/sessions.js";
 import { useStoreSnapshot } from "./hooks.js";
+import { Spinner } from "./ui/Spinner.js";
 
 interface SessionSidebarProps {
 	collapsed: boolean;
@@ -216,14 +217,14 @@ function GroupHeader({
 								title="重命名工作区"
 								onClick={(e) => { e.stopPropagation(); onStartEdit(); }}
 							>
-								<Pencil size={11} />
+								<Pencil size={12} />
 							</button>
 							<button
 								className="rounded p-0.5 text-[var(--inno-text-subtle)] hover:bg-[var(--inno-danger-bg)] hover:text-[var(--inno-danger)]"
 								title="删除工作区"
 								onClick={(e) => { e.stopPropagation(); onDelete(); }}
 							>
-								<Trash2 size={11} />
+								<Trash2 size={12} />
 							</button>
 						</>
 					) : null}
@@ -330,7 +331,7 @@ function SessionCard({
 				</div>
 				<div className="flex items-center gap-0.5 opacity-0 group-hover/card:opacity-100 transition-opacity duration-150">
 					{opening ? (
-						<span className="h-3 w-3 animate-spin rounded-full border-2 border-[var(--inno-border-strong)] border-t-transparent" />
+						<Spinner size={12} className="text-[var(--inno-border-strong)]" />
 					) : null}
 					<button
 						className="rounded p-0.5 text-[var(--inno-text-subtle)] hover:bg-[var(--inno-surface-muted)] hover:text-[var(--inno-text)] disabled:opacity-40"
@@ -339,7 +340,7 @@ function SessionCard({
 						onClick={(e) => { e.stopPropagation(); onGenerate(); }}
 					>
 						{generatingId === session.id ? (
-							<span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+							<Spinner size={12} />
 						) : (
 							<Sparkles size={12} />
 						)}
@@ -631,24 +632,20 @@ export function SessionSidebar({ collapsed }: SessionSidebarProps) {
 							disabled={togglingMode}
 							title={simpleMode ? "当前:简单模式 · 点击切换到普通模式" : "当前:普通模式 · 点击切换到简单模式"}
 							aria-label={simpleMode ? "切换到普通模式" : "切换到简单模式"}
-							className="shrink-0 rounded-lg outline-none focus-visible:shadow-[var(--inno-ring)] disabled:cursor-wait"
-							style={{ perspective: "500px" }}
+							className="flip-card-scene shrink-0 rounded-lg outline-none focus-visible:shadow-[var(--inno-ring)] disabled:cursor-wait"
 						>
 							<motion.div
 								animate={{ rotateY: simpleMode ? 180 : 0 }}
 								transition={{ type: "spring", stiffness: 320, damping: 22 }}
-								style={{ transformStyle: "preserve-3d", position: "relative" }}
-								className="h-7 w-7"
+								className="flip-card h-7 w-7"
 							>
 								<span
-									className="absolute inset-0 flex items-center justify-center rounded-lg border border-[var(--inno-border)] bg-[var(--inno-surface)] text-[10px] font-semibold text-[var(--inno-text)] shadow-sm"
-									style={{ backfaceVisibility: "hidden" }}
+									className="flip-card-face absolute inset-0 flex items-center justify-center rounded-lg border border-[var(--inno-border)] bg-[var(--inno-surface)] text-[10px] font-semibold text-[var(--inno-text)] shadow-sm"
 								>
 									IA
 								</span>
 								<span
-									className="absolute inset-0 flex items-center justify-center rounded-lg border border-[var(--inno-accent)] bg-[var(--inno-accent)] text-[10px] font-semibold text-white shadow-sm"
-									style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)" }}
+									className="flip-card-back absolute inset-0 flex items-center justify-center rounded-lg border border-[var(--inno-accent)] bg-[var(--inno-accent)] text-[10px] font-semibold text-white shadow-sm"
 								>
 									IA
 								</span>
@@ -672,7 +669,7 @@ export function SessionSidebar({ collapsed }: SessionSidebarProps) {
 					<div className="px-2 pb-1 text-[11px] font-medium uppercase tracking-wide text-[var(--inno-text-subtle)]">最近</div>
 					{state.isLoading ? (
 						<div className="flex items-center justify-center py-8">
-							<span className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--inno-border-strong)] border-t-transparent" />
+							<Spinner size={16} className="text-[var(--inno-border-strong)]" />
 						</div>
 					) : recentSessions.length === 0 ? (
 						<div className="inno-sidebar-text px-2 py-8 text-center text-[var(--inno-text-subtle)]">暂无对话</div>
@@ -716,7 +713,7 @@ export function SessionSidebar({ collapsed }: SessionSidebarProps) {
 												className="inline-flex max-w-[140px] items-center gap-1 rounded bg-[var(--inno-surface-muted)] px-1.5 py-px text-[9px] font-medium leading-none text-[var(--inno-text-muted)] ring-1 ring-[var(--inno-border)]"
 												title={`工作区:${ws.name}`}
 											>
-												<FolderKanban size={9} className="shrink-0" />
+												<FolderKanban size={12} className="shrink-0" />
 												<span className="truncate">{ws.name}</span>
 											</span>
 										) : null}
@@ -755,24 +752,20 @@ export function SessionSidebar({ collapsed }: SessionSidebarProps) {
 							disabled={togglingMode}
 							title={simpleMode ? "当前:简单模式 · 点击切换到普通模式" : "当前:普通模式 · 点击切换到简单模式"}
 							aria-label={simpleMode ? "切换到普通模式" : "切换到简单模式"}
-							className="shrink-0 rounded-lg outline-none focus-visible:shadow-[var(--inno-ring)] disabled:cursor-wait"
-							style={{ perspective: "500px" }}
+							className="flip-card-scene shrink-0 rounded-lg outline-none focus-visible:shadow-[var(--inno-ring)] disabled:cursor-wait"
 						>
 							<motion.div
 								animate={{ rotateY: simpleMode ? 180 : 0 }}
 								transition={{ type: "spring", stiffness: 320, damping: 22 }}
-								style={{ transformStyle: "preserve-3d", position: "relative" }}
-								className="h-7 w-7"
+								className="flip-card h-7 w-7"
 							>
 								<span
-									className="absolute inset-0 flex items-center justify-center rounded-lg border border-[var(--inno-border)] bg-[var(--inno-surface)] text-[10px] font-semibold text-[var(--inno-text)] shadow-sm"
-									style={{ backfaceVisibility: "hidden" }}
+									className="flip-card-face absolute inset-0 flex items-center justify-center rounded-lg border border-[var(--inno-border)] bg-[var(--inno-surface)] text-[10px] font-semibold text-[var(--inno-text)] shadow-sm"
 								>
 									IA
 								</span>
 								<span
-									className="absolute inset-0 flex items-center justify-center rounded-lg border border-[var(--inno-accent)] bg-[var(--inno-accent)] text-[10px] font-semibold text-white shadow-sm"
-									style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)" }}
+									className="flip-card-back absolute inset-0 flex items-center justify-center rounded-lg border border-[var(--inno-accent)] bg-[var(--inno-accent)] text-[10px] font-semibold text-white shadow-sm"
 								>
 									IA
 								</span>
@@ -790,7 +783,7 @@ export function SessionSidebar({ collapsed }: SessionSidebarProps) {
 							title="Refresh"
 							onClick={() => void sessionsStore.load()}
 						>
-							<RefreshCw size={13} />
+							<RefreshCw size={14} />
 						</button>
 						<button
 							className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--inno-text-subtle)] transition-colors hover:bg-[var(--inno-surface)] hover:text-[var(--inno-text-muted)]"
@@ -831,7 +824,7 @@ export function SessionSidebar({ collapsed }: SessionSidebarProps) {
 								className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[var(--inno-text-subtle)] hover:bg-[var(--inno-surface-muted)] hover:text-[var(--inno-text-muted)]"
 								onClick={() => { setShowSearch(false); sessionsStore.setSearchQuery(""); }}
 							>
-								<X size={13} />
+								<X size={14} />
 							</button>
 						</div>
 					) : (
@@ -873,7 +866,7 @@ export function SessionSidebar({ collapsed }: SessionSidebarProps) {
 			<div className="flex-1 min-h-0 overflow-y-auto px-1.5 pb-2 sidebar-scroll">
 				{state.isLoading ? (
 					<div className="flex items-center justify-center py-8">
-						<span className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--inno-border-strong)] border-t-transparent" />
+						<Spinner size={16} className="text-[var(--inno-border-strong)]" />
 					</div>
 				) : groups.length === 0 ? (
 					<div className="inno-sidebar-text px-2 py-8 text-center text-[var(--inno-text-subtle)]">

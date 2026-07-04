@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Download, Loader2 } from "lucide-react";
+import { Download } from "lucide-react";
 import type { PptxPreviewResult, PptxSlide, WorkspaceFileDetail } from "../../types/workspace.js";
 import { triggerDownload } from "../../api/workspace.js";
+import { Spinner } from "../ui/Spinner.js";
 
 /**
  * Render a .pptx as a vertical stack of slide SVGs, produced by the backend
@@ -51,7 +52,7 @@ export default function PptxPreview({ file }: { file: WorkspaceFileDetail }) {
 	if (loading) {
 		return (
 			<div className="flex h-full items-center justify-center gap-2 text-sm text-[var(--inno-text-muted)]">
-				<Loader2 size={16} className="animate-spin" />
+				<Spinner size={16} />
 				{t("preview.pptxLoading", "Rendering slides...")}
 			</div>
 		);

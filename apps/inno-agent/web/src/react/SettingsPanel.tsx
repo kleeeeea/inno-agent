@@ -701,7 +701,7 @@ function ChannelsSettings({ settings }: { settings: InnoSettings }) {
 											className="flex items-center gap-1.5 rounded-md inno-primary-button px-3 py-1.5 text-xs text-white"
 											onClick={() => void startQrLogin()}
 										>
-											<QrCodeIcon size={13} />
+											<QrCodeIcon size={14} />
 											{wxConnected ? t("settings.channels.wechat.relogin") : t("settings.channels.wechat.scanLogin")}
 										</button>
 									)}
@@ -1245,7 +1245,7 @@ export function SettingsPanel() {
 											title={t("common.edit", "Edit")}
 											onClick={() => setEditingModel(key)}
 										>
-											<Pencil size={13} />
+											<Pencil size={14} />
 										</button>
 										<button
 											className="flex h-7 w-7 items-center justify-center rounded text-[var(--inno-text-subtle)] opacity-0 transition-opacity hover:bg-[var(--inno-danger-bg)] hover:text-[var(--inno-danger)] group-hover:opacity-100"
@@ -1256,7 +1256,7 @@ export function SettingsPanel() {
 												}
 											}}
 										>
-											<Trash2 size={13} />
+											<Trash2 size={14} />
 										</button>
 										{!current && (
 											<button

@@ -6,6 +6,7 @@ import { parseFrontmatter } from "../../utils/frontmatter.js";
 import { normalizeMarkdownMath } from "../../utils/markdown-math.js";
 import { useStoreSnapshot } from "../hooks.js";
 import "@earendil-works/pi-web-ui";
+import { Spinner } from "../ui/Spinner.js";
 import "@uiw/react-md-editor/markdown-editor.css";
 import "@uiw/react-markdown-preview/markdown.css";
 
@@ -73,7 +74,7 @@ export function PageView() {
 	if (state.isLoading) {
 		return (
 			<div className="flex h-full items-center justify-center text-[var(--inno-text-muted)]">
-				<span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+				<Spinner size={20} />
 			</div>
 		);
 	}

@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { motion } from "motion/react";
 import { useTranslation } from "react-i18next";
 import { Paperclip, X, SendHorizonal, Square, RotateCcw, Image, AlertTriangle, Search } from "lucide-react";
+import { Spinner } from "./ui/Spinner.js";
 import type { ChatMessage } from "../types/chat.js";
 import type { InlineImage } from "../api/chat.js";
 import { chatStore } from "../stores/chat-store.js";
@@ -94,7 +95,7 @@ function ErrorBlock({ error }: { error: string }) {
 	return (
 		<details className="rounded-md border border-[var(--inno-danger-border)] bg-[var(--inno-danger-bg)] px-2.5 py-1.5 text-xs text-[var(--inno-danger)]" open={!isLong}>
 			<summary className="flex cursor-pointer select-none items-center gap-1.5 font-medium">
-				<AlertTriangle size={13} className="shrink-0" />
+				<AlertTriangle size={14} className="shrink-0" />
 				Request failed
 				{isLong ? <span className="text-[var(--inno-danger)]">· click to expand</span> : null}
 			</summary>
@@ -264,7 +265,7 @@ function PresetPicker({
 
 			{showSearch ? (
 				<div className="mb-2 flex items-center gap-2 rounded-md border border-[var(--inno-border)] bg-[var(--inno-surface)] px-2 py-1.5">
-					<Search size={13} className="shrink-0 text-[var(--inno-text-subtle)]" />
+					<Search size={14} className="shrink-0 text-[var(--inno-text-subtle)]" />
 					<input
 						type="text"
 						value={query}
@@ -732,7 +733,7 @@ export function ChatCenter() {
 							title="Remove image"
 							onClick={() => removeInlineImage(index)}
 						>
-							<X size={10} />
+							<X size={12} />
 						</button>
 					</span>
 				))}
@@ -763,10 +764,10 @@ export function ChatCenter() {
 			<input ref={fileInputRef} id="file-input" type="file" className="hidden" multiple onChange={handleFiles} />
 			<input ref={imageInputRef} id="image-input" type="file" className="hidden" multiple accept="image/*" onChange={handleImageFiles} />
 			<button className="inno-icon-button flex h-9 w-9 shrink-0 rounded-md disabled:opacity-50" title={activeWorkspaceId ? "Upload files to workspace" : "请先选择已有工作区或开始对话后再上传文件"} disabled={chat.isSending || isUploading || !activeWorkspaceId} onClick={() => fileInputRef.current?.click()}>
-				{isUploading ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <Paperclip size={18} />}
+				{isUploading ? <Spinner size={16} /> : <Paperclip size={16} />}
 			</button>
 			<button className="inno-icon-button flex h-9 w-9 shrink-0 rounded-md disabled:opacity-50" title="Attach image" disabled={chat.isSending} onClick={() => imageInputRef.current?.click()}>
-				<Image size={18} />
+				<Image size={16} />
 			</button>
 			<textarea
 				ref={inputRef}
@@ -805,7 +806,7 @@ export function ChatCenter() {
 						disabled={isUploading}
 						onClick={handleSend}
 					>
-						<SendHorizonal size={18} />
+						<SendHorizonal size={16} />
 					</button>
 				</>
 			)}
@@ -825,26 +826,22 @@ export function ChatCenter() {
 								disabled={togglingMode}
 								title={simpleMode ? "当前:简单模式 · 点击切换到普通模式" : "当前:普通模式 · 点击切换到简单模式"}
 								aria-label={simpleMode ? "切换到普通模式" : "切换到简单模式"}
-								className="mb-3 rounded-xl outline-none focus-visible:shadow-[var(--inno-ring)] disabled:cursor-wait"
-								style={{ perspective: "600px" }}
+								className="flip-card-scene mb-3 rounded-xl outline-none focus-visible:shadow-[var(--inno-ring)] disabled:cursor-wait"
 							>
 								<motion.div
 									animate={{ rotateY: simpleMode ? 180 : 0 }}
 									transition={{ type: "spring", stiffness: 320, damping: 22 }}
-									style={{ transformStyle: "preserve-3d", position: "relative" }}
-									className="flex h-12 w-12 items-center justify-center"
+									className="flip-card flex h-12 w-12 items-center justify-center"
 								>
 									{/* Front — Normal mode */}
 									<span
-										className="absolute inset-0 flex items-center justify-center rounded-xl border border-[var(--inno-border)] bg-[var(--inno-surface)] text-base font-semibold text-[var(--inno-accent)] shadow-sm transition-colors hover:border-[var(--inno-accent)]"
-										style={{ backfaceVisibility: "hidden" }}
+										className="flip-card-face absolute inset-0 flex items-center justify-center rounded-xl border border-[var(--inno-border)] bg-[var(--inno-surface)] text-base font-semibold text-[var(--inno-accent)] shadow-sm transition-colors hover:border-[var(--inno-accent)]"
 									>
 										IA
 									</span>
 									{/* Back — Simple mode */}
 									<span
-										className="absolute inset-0 flex items-center justify-center rounded-xl border border-[var(--inno-accent)] bg-[var(--inno-accent)] text-base font-semibold text-white shadow-sm"
-										style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)" }}
+										className="flip-card-back absolute inset-0 flex items-center justify-center rounded-xl border border-[var(--inno-accent)] bg-[var(--inno-accent)] text-base font-semibold text-white shadow-sm"
 									>
 										IA
 									</span>
@@ -938,7 +935,7 @@ export function ChatCenter() {
 				<div className="mx-auto flex min-w-0 max-w-3xl flex-col gap-3">
 					{chat.isLoadingHistory && chat.messages.length === 0 ? (
 						<div className="flex h-full flex-col items-center justify-center pt-20 text-[var(--inno-text-muted)]">
-							<span className="mb-3 inline-block h-5 w-5 animate-spin rounded-full border-2 border-[var(--inno-border-strong)] border-t-transparent" />
+							<Spinner size={20} className="mb-3 text-[var(--inno-border-strong)]" />
 							<p className="text-sm">Loading session…</p>
 						</div>
 					) : null}
@@ -961,7 +958,7 @@ export function ChatCenter() {
 							<div className="inno-message min-w-0 max-w-[78%] overflow-hidden rounded-lg border border-[var(--inno-accent-soft)] bg-[var(--inno-accent-soft)] px-3 py-2 text-[13px]">
 								{chat.activeTools.map((tool) => (
 									<div key={tool.toolCallId} className="flex min-w-0 items-center gap-2 text-[var(--inno-text-muted)]">
-										<span className="inline-block h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent" />
+										<Spinner size={12} className="shrink-0" />
 										<span className="min-w-0 break-words font-mono text-xs [overflow-wrap:anywhere]">{tool.toolName}</span>
 									</div>
 								))}

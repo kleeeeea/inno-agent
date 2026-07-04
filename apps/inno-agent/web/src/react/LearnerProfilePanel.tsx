@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { motion, AnimatePresence } from "motion/react";
+import { ChevronRight } from "lucide-react";
+import { Spinner } from "./ui/Spinner.js";
 import { learnerStore } from "../stores/learner-store.js";
 import type {
 	GoalStatus,
@@ -52,14 +54,7 @@ function Section({
 					onClick={() => setCollapsed(!collapsed)}
 					aria-expanded={!collapsed}
 				>
-					<svg
-						className={`h-4 w-4 shrink-0 text-[var(--inno-text-subtle)] transition-transform duration-150 ${collapsed ? "" : "rotate-90"}`}
-						viewBox="0 0 16 16"
-						fill="none"
-						aria-hidden
-					>
-						<path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-					</svg>
+					<ChevronRight size={16} className={`shrink-0 text-[var(--inno-text-subtle)] transition-transform duration-150 ${collapsed ? "" : "rotate-90"}`} />
 					<h4 className="truncate text-base font-semibold text-[var(--inno-text)]">{title}</h4>
 					{typeof count === "number" ? (
 						<span className="rounded-full bg-[var(--inno-surface-muted)] px-2 py-0.5 text-xs font-medium text-[var(--inno-text-muted)]">{count}</span>
@@ -878,7 +873,7 @@ export function LearnerProfilePanel() {
 
 				{state.isLoading ? (
 					<div className="flex items-center justify-center py-8 text-[var(--inno-text-muted)]">
-						<span className="mr-2 inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+						<Spinner size={16} className="mr-2" />
 						{t("common.loading")}
 					</div>
 				) : null}
