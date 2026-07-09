@@ -8,7 +8,6 @@ import { logger } from "../logger.js";
 
 // if DO_SKIP_REMOTE, don't use any remote github repo, just use inno-agent/apps/inno-agent/presets
 const DO_SKIP_REMOTE = 1;
-
 /**
  * Preset workspaces — ready-to-use templates surfaced in Simple Mode.
  *
