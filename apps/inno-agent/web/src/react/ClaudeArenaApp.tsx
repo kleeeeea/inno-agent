@@ -1,18 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { List, MessageSquare, PlusCircle, RefreshCw, Search, SendHorizonal, Swords } from "lucide-react";
+import { MessageSquare, RefreshCw, SendHorizonal, Swords } from "lucide-react";
 import { createSession, getSession } from "../api/sessions.js";
-import type { SessionMeta } from "../api/sessions.js";
 import { streamChat } from "../api/chat.js";
 import type { ChatMessage, ChatStreamEvent, ChatToolRecord } from "../types/chat.js";
 import { normalizeMarkdownMath } from "../utils/markdown-math.js";
 import { ErrorBlock, MessageBubble } from "./ChatCenter.js";
 import { Spinner } from "./ui/Spinner.js";
 import { WorkspacePanel } from "./WorkspacePanel.js";
-import type { RightPanelTab } from "../stores/app-store.js";
+import { appStore, type RightPanelTab } from "../stores/app-store.js";
 import { WorkspaceStoreImpl } from "../stores/workspace-store.js";
 import { sessionsStore } from "../stores/sessions-store.js";
 import { workspacesStore } from "../stores/workspaces-store.js";
-import { arenaStore, buildArenaHistories, isArenaGeneratedWorkspace, type ArenaHistory } from "../stores/arena-store.js";
+import { arenaStore, isArenaGeneratedWorkspace, type ArenaHistory } from "../stores/arena-store.js";
+import { SessionSidebar } from "./SessionSidebar.js";
 import { useStoreSnapshot } from "./hooks.js";
 import "@earendil-works/pi-web-ui";
 
@@ -165,88 +165,6 @@ function ArenaLaneSidebar({ lane, workspaceName }: { lane: ArenaLaneState; works
 	);
 }
 
-function ArenaHistorySidebar({
-	histories,
-	onOpen,
-	onNew,
-	query,
-	onQueryChange,
-}: {
-	histories: ArenaHistory[];
-	onOpen: (history: ArenaHistory) => void;
-	onNew: () => void;
-	query: string;
-	onQueryChange: (query: string) => void;
-}) {
-	const filtered = histories.filter((history) => {
-		const q = query.trim().toLowerCase();
-		if (!q) return true;
-		return history.label.toLowerCase().includes(q) || history.preview.toLowerCase().includes(q);
-	});
-	return (
-		<aside className="flex h-screen w-64 shrink-0 flex-col border-r border-[var(--inno-border)] bg-[var(--inno-sidebar-bg)] text-sm">
-			<div className="flex h-12 items-center gap-2 border-b border-[var(--inno-border)] px-4">
-				<div className="flex h-7 w-7 items-center justify-center rounded-md bg-[var(--inno-accent)] text-xs font-semibold text-white">EA</div>
-				<div className="min-w-0 flex-1 truncate font-semibold text-[var(--inno-text)]">EduAgentArena</div>
-			</div>
-			<div className="space-y-1 border-b border-[var(--inno-border)] p-3">
-				<button
-					type="button"
-					className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[var(--inno-text)] hover:bg-[var(--inno-surface)]"
-					onClick={onNew}
-				>
-					<PlusCircle size={15} />
-					New Battle
-				</button>
-				<div className="flex items-center gap-2 rounded-md px-2 py-1.5 text-[var(--inno-text-muted)]">
-					<List size={15} />
-					Battle History
-				</div>
-				<label className="flex items-center gap-2 rounded-md border border-[var(--inno-border)] bg-[var(--inno-surface)] px-2 py-1.5 text-[var(--inno-text-muted)]">
-					<Search size={14} />
-					<input
-						value={query}
-						onChange={(event) => onQueryChange(event.target.value)}
-						placeholder="Search"
-						className="min-w-0 flex-1 bg-transparent text-xs text-[var(--inno-text)] outline-none placeholder:text-[var(--inno-text-subtle)]"
-					/>
-				</label>
-			</div>
-			<div className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
-				<div className="mb-2 px-2 text-[10px] font-medium uppercase tracking-wide text-[var(--inno-text-subtle)]">
-					Previous Battles
-				</div>
-				{filtered.length === 0 ? (
-					<div className="px-2 py-6 text-xs text-[var(--inno-text-subtle)]">
-						{histories.length === 0 ? "No previous battles yet." : "No matching battles."}
-					</div>
-				) : null}
-				<div className="grid gap-1">
-					{filtered.map((history) => (
-					<button
-						key={history.key}
-						type="button"
-						className="rounded-md px-2 py-2 text-left transition-colors hover:bg-[var(--inno-surface)]"
-						onClick={() => onOpen(history)}
-					>
-						<div className="flex items-center gap-2 text-xs">
-							<Swords size={12} className="shrink-0 text-[var(--inno-text-subtle)]" />
-							<span className="min-w-0 flex-1 truncate font-medium text-[var(--inno-text)]">{history.label}</span>
-						</div>
-						{history.preview ? (
-							<div className="mt-1 line-clamp-1 pl-5 text-[10px] text-[var(--inno-text-muted)]">{history.preview}</div>
-						) : null}
-						<div className="mt-0.5 pl-5 text-[10px] text-[var(--inno-text-subtle)]">
-							{new Date(history.updatedAt).toLocaleString()}
-						</div>
-					</button>
-				))}
-				</div>
-			</div>
-		</aside>
-	);
-}
-
 function LanePanel({
 	lane,
 	workspaceName,
@@ -375,14 +293,13 @@ export function ClaudeArenaApp({ onSwitchChat }: { onSwitchChat?: () => void }) 
 	const [lanes, setLanes] = useState<ArenaLaneState[]>(() => createInitialLanes());
 	const [error, setError] = useState("");
 	const workspaces = useStoreSnapshot(workspacesStore, () => workspacesStore.workspaces);
-	const sessions = useStoreSnapshot(sessionsStore, () => sessionsStore.sessions);
 	const sourceWorkspaces = useMemo(
 		() => workspaces.filter((workspace) => !workspace.isTemp && !workspace.id.startsWith("channel-") && !isArenaGeneratedWorkspace(workspace.id)),
 		[workspaces],
 	);
-	const arenaHistories = useMemo(() => buildArenaHistories(workspaces, sessions), [workspaces, sessions]);
 	const [sourceWorkspaceId, setSourceWorkspaceId] = useState("");
-	const [historyQuery, setHistoryQuery] = useState("");
+	// 左侧直接复用聊天模式的原版 SessionSidebar，折叠状态沿用全局 appStore
+	const sidebarCollapsed = useStoreSnapshot(appStore, () => appStore.sidebarCollapsed);
 	const isSending = lanes.some((lane) => lane.isSending);
 
 	useEffect(() => {
@@ -439,10 +356,15 @@ export function ClaudeArenaApp({ onSwitchChat }: { onSwitchChat?: () => void }) 
 		})();
 	}, [isSending]);
 
-	// 从聊天侧边栏的"对战"列表点进来的历史对战：挂载后取走并恢复（一次性消费）
+	// 侧边栏"对战"列表点开的历史对战：挂载时消费一次，之后持续订阅——
+	// 已经身处 Arena 视图时再点其它对战也能直接切换（一次性消费防 StrictMode 重复恢复）
 	useEffect(() => {
-		const pendingHistory = arenaStore.consumePendingHistory();
-		if (pendingHistory) openArenaHistory(pendingHistory);
+		const consumePendingHistory = () => {
+			const pendingHistory = arenaStore.consumePendingHistory();
+			if (pendingHistory) openArenaHistory(pendingHistory);
+		};
+		consumePendingHistory();
+		return arenaStore.on("change", consumePendingHistory);
 	}, [openArenaHistory]);
 
 	const ensureLaneSession = useCallback(async (lane: ArenaLaneState): Promise<{ sessionId: string; workspaceId: string | null }> => {
@@ -558,13 +480,11 @@ export function ClaudeArenaApp({ onSwitchChat }: { onSwitchChat?: () => void }) 
 
 	return (
 		<div className="claude-arena flex h-screen min-h-0 bg-[var(--inno-background)] text-[var(--inno-text)]">
-			<ArenaHistorySidebar
-				histories={arenaHistories}
-				onOpen={openArenaHistory}
-				onNew={resetArenaLanes}
-				query={historyQuery}
-				onQueryChange={setHistoryQuery}
-			/>
+			{/* 左侧直接复用聊天模式的原版会话侧边栏（含"对战"类型入口）；
+			    SessionSidebar 自身不带宽度（原布局由 .app-layout 网格供给），这里用包装层给定 */}
+			<div className={sidebarCollapsed ? "relative h-screen w-10 shrink-0" : "h-screen w-72 shrink-0 overflow-hidden"}>
+				<SessionSidebar collapsed={sidebarCollapsed} />
+			</div>
 			<div className="flex min-h-0 min-w-0 flex-1 flex-col">
 			<header className="flex h-10 shrink-0 items-center gap-3 border-b border-[var(--inno-border)] bg-[var(--inno-surface)] px-4">
 				<div className="flex h-6 w-6 items-center justify-center rounded-md bg-[var(--inno-accent)] text-xs font-semibold text-white">EA</div>

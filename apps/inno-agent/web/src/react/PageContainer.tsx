@@ -62,6 +62,23 @@ export function PageContainer({ children }: { children: ReactNode }) {
 		});
 	}, []);
 
+	// Arena 视图里左侧用的是原版会话侧边栏：点开普通会话或"新建对话"时跳回聊天视图。
+	// 只监听用户驱动的状态变化（currentSessionId / pendingNewSession），
+	// sessionsStore.load()/refresh() 这类后台刷新不会触碰这两个字段，不会误切。
+	useEffect(() => {
+		if (!(theme === "claude" && claudeMode === "arena")) return;
+		let lastSessionId = sessionsStore.currentSessionId;
+		let lastPendingNew = sessionsStore.pendingNewSession;
+		return sessionsStore.on("change", () => {
+			const currentSessionId = sessionsStore.currentSessionId;
+			const pendingNew = sessionsStore.pendingNewSession;
+			const userNavigated = currentSessionId !== lastSessionId || (pendingNew && !lastPendingNew);
+			lastSessionId = currentSessionId;
+			lastPendingNew = pendingNew;
+			if (userNavigated) switchClaudeMode("chat");
+		});
+	}, [theme, claudeMode, switchClaudeMode]);
+
 	return (
 		<StrictMode>
 			<div
