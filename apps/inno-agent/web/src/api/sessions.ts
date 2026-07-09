@@ -36,6 +36,7 @@ export interface CreateSessionInput {
 	newWorkspace?: {
 		name?: string;
 		isTemp?: boolean;
+		copyFromWorkspaceId?: string;
 	};
 	/** Instantiate a bundled preset into a fresh workspace and bind to it. Takes precedence over the other fields. */
 	presetId?: string;

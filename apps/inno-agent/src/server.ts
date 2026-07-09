@@ -2595,7 +2595,7 @@ const server = createServer(async (req, res) => {
 			const explicitWorkspaceId = typeof body.workspaceId === "string" ? body.workspaceId.trim() : "";
 			const presetId = typeof body.presetId === "string" ? body.presetId.trim() : "";
 			const newWorkspaceSpec = body.newWorkspace && typeof body.newWorkspace === "object"
-				? body.newWorkspace as { name?: unknown; isTemp?: unknown }
+				? body.newWorkspace as { name?: unknown; isTemp?: unknown; copyFromWorkspaceId?: unknown }
 				: null;
 			try {
 				if (presetId) {
@@ -2610,6 +2610,16 @@ const server = createServer(async (req, res) => {
 						isTemp: Boolean(newWorkspaceSpec.isTemp),
 					});
 					workspaceId = created.id;
+					const copyFromWorkspaceId = typeof newWorkspaceSpec.copyFromWorkspaceId === "string"
+						? newWorkspaceSpec.copyFromWorkspaceId.trim()
+						: "";
+					if (copyFromWorkspaceId && !created.isTemp) {
+						const sourceDir = workspaceRegistry.resolveWorkspaceDir(copyFromWorkspaceId);
+						const targetDir = workspaceRegistry.resolveWorkspaceDir(created.id);
+						if (sourceDir && targetDir && sourceDir !== targetDir && existsSync(sourceDir)) {
+							cpSync(sourceDir, targetDir, { recursive: true, force: true });
+						}
+					}
 				} else if (explicitWorkspaceId && workspaceRegistry.getWorkspace(explicitWorkspaceId)) {
 					workspaceId = explicitWorkspaceId;
 				}
