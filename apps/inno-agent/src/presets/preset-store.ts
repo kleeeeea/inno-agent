@@ -6,6 +6,9 @@ import type { RemoteContentSource } from "../content-source/index.js";
 import { mapWithConcurrency } from "../content-source/types.js";
 import { logger } from "../logger.js";
 
+// if DO_SKIP_REMOTE, don't use any remote github repo, just use inno-agent/apps/inno-agent/presets
+const DO_SKIP_REMOTE = 1;
+
 /**
  * Preset workspaces — ready-to-use templates surfaced in Simple Mode.
  *
@@ -108,6 +111,7 @@ export function listPresets(paths: RuntimePaths): PresetMeta[] {
 	return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name));
 }
 
+
 /**
  * List presets available from the remote content hub. For each preset, the
  * metadata comes from inline source meta (bundle service) or by reading its
@@ -115,6 +119,9 @@ export function listPresets(paths: RuntimePaths): PresetMeta[] {
  * skipped.
  */
 export async function listRemotePresets(source: RemoteContentSource, forceRefresh = false): Promise<PresetMeta[]> {
+	// DO_SKIP_REMOTE：不访问远端目录，返回空列表——server 端对空结果会自动回退到
+	// listPresets(paths)（随包 presets ∪ 本地缓存），效果即"只用 apps/inno-agent/presets"。
+	if (DO_SKIP_REMOTE) return [];
 	const items = await source.listItems("presets", { forceRefresh });
 	// GitHub reads one preset.json per item over raw.githubusercontent.com, which
 	// throttles bursts (429). Cap concurrency so a large catalog doesn't trip the
@@ -160,6 +167,20 @@ export async function ensurePresetCached(
 	const root = presetsDir(paths);
 	const cacheDir = join(root, id);
 	const cachedMetaExists = existsSync(join(cacheDir, "preset.json"));
+	// DO_SKIP_REMOTE：完全不碰远端。随包目录里有就每次重新播种缓存（这样直接改
+	// apps/inno-agent/presets 里的文件无需清缓存即可生效），没有再退回已有缓存。
+	if (DO_SKIP_REMOTE) {
+		const bundledDir = join(bundledPresetsDir(paths), id);
+		if (existsSync(join(bundledDir, "preset.json"))) {
+			copyPresetContents(bundledDir, cacheDir);
+			// copyPresetContents skips preset.json, so copy it explicitly.
+			writeFileSync(join(cacheDir, "preset.json"), readFileSync(join(bundledDir, "preset.json")));
+			logger.info({ presetId: id, cacheDir }, "seeded preset from bundled copy (DO_SKIP_REMOTE)");
+			return cacheDir;
+		}
+		if (cachedMetaExists) return cacheDir;
+		throw new Error(`Preset "${id}" not found in bundled presets (DO_SKIP_REMOTE)`);
+	}
 	if (cachedMetaExists && !forceRefresh) {
 		return cacheDir;
 	}
