@@ -12,22 +12,11 @@ import type { RightPanelTab } from "../stores/app-store.js";
 import { WorkspaceStoreImpl } from "../stores/workspace-store.js";
 import { sessionsStore } from "../stores/sessions-store.js";
 import { workspacesStore } from "../stores/workspaces-store.js";
-import { arenaStore } from "../stores/arena-store.js";
+import { arenaStore, buildArenaHistories, isArenaGeneratedWorkspace, type ArenaHistory } from "../stores/arena-store.js";
 import { useStoreSnapshot } from "./hooks.js";
 import "@earendil-works/pi-web-ui";
 
 type ArenaLaneId = "top" | "bottom";
-
-interface ArenaHistory {
-	key: string;
-	label: string;
-	aWorkspaceId: string;
-	bWorkspaceId: string;
-	aSessionId: string | null;
-	bSessionId: string | null;
-	updatedAt: string;
-	preview: string;
-}
 
 interface ArenaLaneState {
 	id: ArenaLaneId;
@@ -50,48 +39,6 @@ function createInitialLanes(): ArenaLaneState[] {
 		createInitialLane("top", "Arena A"),
 		createInitialLane("bottom", "Arena B"),
 	];
-}
-
-function isArenaGeneratedWorkspace(id: string): boolean {
-	return id.startsWith("arena-a-") || id.startsWith("arena-b-");
-}
-
-function arenaHistoryKey(name: string): { side: "a" | "b"; key: string } | null {
-	const match = name.match(/^Arena\s+([AB])\s+(.+)$/i);
-	if (!match) return null;
-	return { side: match[1].toLowerCase() as "a" | "b", key: match[2] };
-}
-
-function buildArenaHistories(
-	workspaces: ReturnType<typeof workspacesStore.getById>[],
-	sessions: SessionMeta[],
-): ArenaHistory[] {
-	const sessionById = new Map(sessions.map((session) => [session.id, session]));
-	const pairs = new Map<string, Partial<ArenaHistory>>();
-	for (const workspace of workspaces) {
-		if (!workspace || !isArenaGeneratedWorkspace(workspace.id)) continue;
-		const parsed = arenaHistoryKey(workspace.name);
-		if (!parsed) continue;
-		const existing = pairs.get(parsed.key) ?? { key: parsed.key, label: parsed.key, preview: "", updatedAt: workspace.updatedAt };
-		const sessionId = workspace.sessionIds?.[0] ?? null;
-		const session = sessionId ? sessionById.get(sessionId) : undefined;
-		const next: Partial<ArenaHistory> = {
-			...existing,
-			updatedAt: Date.parse(workspace.updatedAt) > Date.parse(existing.updatedAt ?? "") ? workspace.updatedAt : existing.updatedAt,
-			preview: existing.preview || session?.preview || "",
-		};
-		if (parsed.side === "a") {
-			next.aWorkspaceId = workspace.id;
-			next.aSessionId = sessionId;
-		} else {
-			next.bWorkspaceId = workspace.id;
-			next.bSessionId = sessionId;
-		}
-		pairs.set(parsed.key, next);
-	}
-	return Array.from(pairs.values())
-		.filter((history): history is ArenaHistory => Boolean(history.aWorkspaceId && history.bWorkspaceId))
-		.sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
 }
 
 function createInitialLane(id: ArenaLaneId, title: string): ArenaLaneState {
@@ -491,6 +438,12 @@ export function ClaudeArenaApp({ onSwitchChat }: { onSwitchChat?: () => void }) 
 			}
 		})();
 	}, [isSending]);
+
+	// 从聊天侧边栏的"对战"列表点进来的历史对战：挂载后取走并恢复（一次性消费）
+	useEffect(() => {
+		const pendingHistory = arenaStore.consumePendingHistory();
+		if (pendingHistory) openArenaHistory(pendingHistory);
+	}, [openArenaHistory]);
 
 	const ensureLaneSession = useCallback(async (lane: ArenaLaneState): Promise<{ sessionId: string; workspaceId: string | null }> => {
 		if (lane.sessionId) return { sessionId: lane.sessionId, workspaceId: lane.workspaceId };

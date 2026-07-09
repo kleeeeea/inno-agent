@@ -546,6 +546,7 @@
 		"newChat": "New chat",
 		"searchPlaceholder": "Search conversations...",
 		"all": "All",
+		"arenaBattles": "Battles",
 		"noMatch": "No matching results",
 		"noSessions": "No conversations yet",
 		"confirmDeleteSession": "Delete conversation \"{{name}}\"? This cannot be undone.",

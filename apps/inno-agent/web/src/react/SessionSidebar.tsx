@@ -15,6 +15,7 @@ import {
 	Search,
 	X,
 	FolderKanban,
+	Swords,
 } from "lucide-react";
 import { appStore } from "../stores/app-store.js";
 import { chatStore } from "../stores/chat-store.js";
@@ -27,6 +28,7 @@ import type { SessionChannel, SessionMeta } from "../api/sessions.js";
 import { useStoreSnapshot } from "./hooks.js";
 import { Spinner } from "./ui/Spinner.js";
 import { themeStore } from "../stores/theme-store.js";
+import { arenaStore, buildArenaHistories } from "../stores/arena-store.js";
 import { getBrandInitials, getBrandName } from "../brand.js";
 
 interface SessionSidebarProps {
@@ -409,6 +411,18 @@ export function SessionSidebar({ collapsed }: SessionSidebarProps) {
 	const simpleMode = useStoreSnapshot(settingsStore, () => settingsStore.settings?.simpleMode?.enabled === true);
 	// 品牌名随主题切换（Claude 皮肤 → EduAgentArena）
 	const brand = useStoreSnapshot(themeStore, () => ({ name: getBrandName(), initials: getBrandInitials() }));
+	// "对战"类型筛选：列出所有历史 Arena 对战（A/B 工作区成对），点击可回到对应对战页。
+	// Arena 视图只在 Claude 主题下渲染，其它主题下隐藏该类型入口
+	const isClaudeTheme = useStoreSnapshot(themeStore, () => themeStore.current === "claude");
+	const [arenaFilter, setArenaFilter] = useState(false);
+	const arenaHistories = useMemo(
+		() => (isClaudeTheme ? buildArenaHistories(wsState.list, state.sessions) : []),
+		[isClaudeTheme, wsState.list, state.sessions],
+	);
+	// 切走 Claude 主题时退出对战视图，避免停留在空列表
+	useEffect(() => {
+		if (!isClaudeTheme && arenaFilter) setArenaFilter(false);
+	}, [isClaudeTheme, arenaFilter]);
 	const [togglingMode, setTogglingMode] = useState(false);
 
 	// Toggle Simple/Normal mode from the top-left logo (flip animation).
@@ -849,23 +863,43 @@ export function SessionSidebar({ collapsed }: SessionSidebarProps) {
 				</div>
 
 				{/* Channel filter chips — hidden in Simple Mode (web-only view) */}
-				{!simpleMode && state.availableChannels.length > 1 && (
+				{!simpleMode && (state.availableChannels.length > 1 || arenaHistories.length > 0) && (
 					<div className="flex flex-wrap items-center gap-1">
-						{orderedChannels.map((ch) => (
+						{state.availableChannels.length > 1 ? (
+							<>
+								{orderedChannels.map((ch) => (
+									<button
+										key={ch}
+										className={`inno-channel-filter-chip inno-sidebar-meta rounded-full px-1.5 py-px font-medium transition-colors ${channelFilterClass(ch, !arenaFilter && state.channelFilter === ch)}`}
+										onClick={() => {
+											setArenaFilter(false);
+											sessionsStore.setChannelFilter(state.channelFilter === ch ? null : ch);
+										}}
+									>
+										{channelLabel(ch)}
+									</button>
+								))}
+								<button
+									className={`inno-channel-filter-chip inno-sidebar-meta rounded-full px-1.5 py-px font-medium transition-colors ${channelFilterClass(null, !arenaFilter && state.channelFilter === null)}`}
+									onClick={() => {
+										setArenaFilter(false);
+										sessionsStore.setChannelFilter(null);
+									}}
+								>
+									{t("sidebar.all")}
+								</button>
+							</>
+						) : null}
+						{/* "对战"类型：历史 Arena 对战列表 */}
+						{arenaHistories.length > 0 ? (
 							<button
-								key={ch}
-								className={`inno-channel-filter-chip inno-sidebar-meta rounded-full px-1.5 py-px font-medium transition-colors ${channelFilterClass(ch, state.channelFilter === ch)}`}
-								onClick={() => sessionsStore.setChannelFilter(state.channelFilter === ch ? null : ch)}
+								className={`inno-channel-filter-chip inno-sidebar-meta inline-flex items-center gap-0.5 rounded-full px-1.5 py-px font-medium transition-colors ${channelFilterClass(null, arenaFilter)}`}
+								onClick={() => setArenaFilter((v) => !v)}
 							>
-								{channelLabel(ch)}
+								<Swords size={10} />
+								{t("sidebar.arenaBattles")}
 							</button>
-						))}
-						<button
-							className={`inno-channel-filter-chip inno-sidebar-meta rounded-full px-1.5 py-px font-medium transition-colors ${channelFilterClass(null, state.channelFilter === null)}`}
-							onClick={() => sessionsStore.setChannelFilter(null)}
-						>
-							{t("sidebar.all")}
-						</button>
+						) : null}
 					</div>
 				)}
 			</div>
@@ -875,6 +909,29 @@ export function SessionSidebar({ collapsed }: SessionSidebarProps) {
 				{state.isLoading ? (
 					<div className="flex items-center justify-center py-8">
 						<Spinner size={16} className="text-[var(--inno-border-strong)]" />
+					</div>
+				) : arenaFilter ? (
+					/* 对战类型视图：每项是一场 A/B 对战，点击进入对应的 Arena 分屏页 */
+					<div className="mt-1 grid gap-0.5">
+						{arenaHistories.map((history) => (
+							<button
+								key={history.key}
+								type="button"
+								className="rounded-md px-2 py-2 text-left transition-colors hover:bg-[var(--inno-sidebar-active)]"
+								onClick={() => arenaStore.openHistory(history)}
+							>
+								<div className="flex items-center gap-1.5">
+									<Swords size={12} className="shrink-0 text-[var(--inno-accent)]" />
+									<span className="inno-sidebar-text min-w-0 flex-1 truncate font-medium text-[var(--inno-text)]">
+										{history.preview || history.label}
+									</span>
+									<span className="inno-sidebar-meta shrink-0 text-[var(--inno-text-subtle)]">{formatTime(history.updatedAt)}</span>
+								</div>
+								<div className="inno-sidebar-meta mt-0.5 truncate pl-[18px] text-[var(--inno-text-subtle)]">
+									Arena A vs Arena B · {history.label}
+								</div>
+							</button>
+						))}
 					</div>
 				) : groups.length === 0 ? (
 					<div className="inno-sidebar-text px-2 py-8 text-center text-[var(--inno-text-subtle)]">

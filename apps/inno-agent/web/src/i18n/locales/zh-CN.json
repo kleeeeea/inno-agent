@@ -546,6 +546,7 @@
 		"newChat": "新建对话",
 		"searchPlaceholder": "搜索对话...",
 		"all": "全部",
+		"arenaBattles": "对战",
 		"noMatch": "无匹配结果",
 		"noSessions": "暂无对话记录",
 		"confirmDeleteSession": "删除会话「{{name}}」？此操作不可撤回。",

@@ -48,10 +48,10 @@ export function PageContainer({ children }: { children: ReactNode }) {
 		localStorage.setItem(CLAUDE_VIEW_MODE_KEY, mode);
 	}, []);
 
-	// 欢迎屏发送触发 launch（带首条 prompt）后才真正切进 Arena 分屏
+	// 欢迎屏发送触发 launch（带首条 prompt）、或侧边栏点开历史对战时，才真正切进 Arena 分屏
 	useEffect(() => {
 		return arenaStore.on("change", () => {
-			if (arenaStore.pendingPrompt) switchClaudeMode("arena");
+			if (arenaStore.pendingPrompt || arenaStore.pendingHistory) switchClaudeMode("arena");
 		});
 	}, [switchClaudeMode]);
 
