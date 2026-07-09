@@ -645,7 +645,7 @@ function DeleteConfirm({ paths, onConfirm, onCancel }: { paths: string[]; onConf
 
 /* ---------- Main Component ---------- */
 
-interface WorkspaceBrowserProps {
+export interface WorkspaceBrowserProps {
 	store?: WorkspaceStoreImpl;
 	workspaceId?: string | null;
 	sessionId?: string | null;

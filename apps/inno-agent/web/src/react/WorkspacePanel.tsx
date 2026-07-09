@@ -5,7 +5,7 @@ import { PanelRightOpen, PanelRightClose, Columns2, Maximize2, BookOpen, Briefca
 import type { RightPanelTab, WorkspaceMode } from "../stores/app-store.js";
 import { settingsStore } from "../stores/settings-store.js";
 import { useStoreSnapshot } from "./hooks.js";
-import { WorkspaceBrowser } from "./WorkspaceBrowser.js";
+import { WorkspaceBrowser, type WorkspaceBrowserProps } from "./WorkspaceBrowser.js";
 import { Notebook } from "./Notebook.js";
 import { JobsPanel } from "./JobsPanel.js";
 import { LearnerProfilePanel } from "./LearnerProfilePanel.js";
@@ -19,6 +19,8 @@ interface WorkspacePanelProps {
 	onTabChange(tab: RightPanelTab): void;
 	onModeChange(mode: WorkspaceMode): void;
 	onWidthChange(width: number): void;
+	workspaceBrowserProps?: WorkspaceBrowserProps;
+	hidePanelControls?: boolean;
 }
 
 const TAB_ORDER: RightPanelTab[] = ["preview", "notebook", "profile", "jobs", "skills", "settings"];
@@ -32,12 +34,12 @@ const TAB_ICONS: Record<RightPanelTab, React.ReactNode> = {
 	settings: <Settings size={14} />,
 };
 
-function WorkspaceContent({ activeTab }: { activeTab: RightPanelTab }) {
+function WorkspaceContent({ activeTab, workspaceBrowserProps }: { activeTab: RightPanelTab; workspaceBrowserProps?: WorkspaceBrowserProps }) {
 	switch (activeTab) {
 		case "notebook":
 			return <Notebook />;
 		case "preview":
-			return <WorkspaceBrowser />;
+			return <WorkspaceBrowser {...workspaceBrowserProps} />;
 		case "profile":
 			return <LearnerProfilePanel />;
 		case "skills":
@@ -49,7 +51,7 @@ function WorkspaceContent({ activeTab }: { activeTab: RightPanelTab }) {
 	}
 }
 
-export function WorkspacePanel({ activeTab, mode, width, onTabChange, onModeChange, onWidthChange }: WorkspacePanelProps) {
+export function WorkspacePanel({ activeTab, mode, width, onTabChange, onModeChange, onWidthChange, workspaceBrowserProps, hidePanelControls = false }: WorkspacePanelProps) {
 	const { t } = useTranslation();
 	const [isResizing, setIsResizing] = useState(false);
 
@@ -109,7 +111,7 @@ export function WorkspacePanel({ activeTab, mode, width, onTabChange, onModeChan
 
 	return (
 		<aside className="workspace-panel inno-workspace-scope relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden border-l border-[var(--inno-border)] bg-[var(--inno-workspace-bg)]">
-			{mode === "half" || mode === "quarter" ? (
+			{!hidePanelControls && (mode === "half" || mode === "quarter") ? (
 				<button
 					className="workspace-resize-handle"
 					aria-label={t("workspace.resize") ?? ""}
@@ -137,7 +139,7 @@ export function WorkspacePanel({ activeTab, mode, width, onTabChange, onModeChan
 						);
 					})}
 				</div>
-				<div className="ml-1 flex shrink-0 items-center gap-1 border-l border-[var(--inno-border)] pl-1">
+				{hidePanelControls ? null : <div className="ml-1 flex shrink-0 items-center gap-1 border-l border-[var(--inno-border)] pl-1">
 					<button
 						className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--inno-text-subtle)] transition-colors hover:bg-[var(--inno-surface)] hover:text-[var(--inno-text-muted)]"
 						title={mode === "full" ? (t("workspace.half") ?? "") : (t("workspace.full") ?? "")}
@@ -152,7 +154,7 @@ export function WorkspacePanel({ activeTab, mode, width, onTabChange, onModeChan
 					>
 						<PanelRightClose size={14} />
 					</button>
-				</div>
+				</div>}
 			</div>
 
 			<div
@@ -172,7 +174,7 @@ export function WorkspacePanel({ activeTab, mode, width, onTabChange, onModeChan
 						exit={{ opacity: 0, y: -6 }}
 						transition={{ duration: 0.18, ease: "easeOut" }}
 					>
-						<WorkspaceContent activeTab={activeTab} />
+						<WorkspaceContent activeTab={activeTab} workspaceBrowserProps={workspaceBrowserProps} />
 					</motion.div>
 				</AnimatePresence>
 			</div>

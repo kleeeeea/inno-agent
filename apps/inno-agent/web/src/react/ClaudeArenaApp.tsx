@@ -6,7 +6,8 @@ import type { ChatMessage, ChatStreamEvent, ChatToolRecord } from "../types/chat
 import { normalizeMarkdownMath } from "../utils/markdown-math.js";
 import { ErrorBlock, MessageBubble } from "./ChatCenter.js";
 import { Spinner } from "./ui/Spinner.js";
-import { WorkspaceBrowser } from "./WorkspaceBrowser.js";
+import { WorkspacePanel } from "./WorkspacePanel.js";
+import type { RightPanelTab } from "../stores/app-store.js";
 import { WorkspaceStoreImpl } from "../stores/workspace-store.js";
 import { sessionsStore } from "../stores/sessions-store.js";
 import { workspacesStore } from "../stores/workspaces-store.js";
@@ -28,6 +29,7 @@ interface ArenaLaneState {
 	activeTools: ChatToolRecord[];
 	completedTools: ChatToolRecord[];
 	workspaceStore: WorkspaceStoreImpl;
+	rightPanelTab: RightPanelTab;
 }
 
 function createInitialLanes(): ArenaLaneState[] {
@@ -55,6 +57,7 @@ function createInitialLane(id: ArenaLaneId, title: string): ArenaLaneState {
 		activeTools: [],
 		completedTools: [],
 		workspaceStore: new WorkspaceStoreImpl(),
+		rightPanelTab: "preview",
 	};
 }
 
@@ -167,9 +170,11 @@ function ArenaLaneSidebar({ lane, workspaceName }: { lane: ArenaLaneState; works
 function LanePanel({
 	lane,
 	workspaceName,
+	onTabChange,
 }: {
 	lane: ArenaLaneState;
 	workspaceName: string | null;
+	onTabChange: (laneId: ArenaLaneId, tab: RightPanelTab) => void;
 }) {
 	const scrollRef = useRef<HTMLDivElement | null>(null);
 	useEffect(() => {
@@ -257,11 +262,20 @@ function LanePanel({
 				</div>
 				<aside className="w-[34vw] min-w-[360px] max-w-[720px] shrink-0 border-l border-[var(--inno-border)] bg-[var(--inno-workspace-bg)]">
 					{lane.workspaceId ? (
-						<WorkspaceBrowser
-							store={lane.workspaceStore}
-							workspaceId={lane.workspaceId}
-							sessionId={lane.sessionId}
-							showTerminal={false}
+						<WorkspacePanel
+							activeTab={lane.rightPanelTab}
+							mode="half"
+							width={560}
+							onTabChange={(tab) => onTabChange(lane.id, tab)}
+							onModeChange={() => undefined}
+							onWidthChange={() => undefined}
+							hidePanelControls
+							workspaceBrowserProps={{
+								store: lane.workspaceStore,
+								workspaceId: lane.workspaceId,
+								sessionId: lane.sessionId,
+								showTerminal: false,
+							}}
 						/>
 					) : (
 						<div className="flex h-full items-center justify-center px-6 text-center text-xs text-[var(--inno-text-subtle)]">
@@ -300,6 +314,10 @@ export function ClaudeArenaApp({ onSwitchChat }: { onSwitchChat?: () => void }) 
 	const patchLane = useCallback((id: ArenaLaneId, update: (lane: ArenaLaneState) => ArenaLaneState) => {
 		setLanes((current) => current.map((lane) => lane.id === id ? update(lane) : lane));
 	}, []);
+
+	const setLaneTab = useCallback((laneId: ArenaLaneId, tab: RightPanelTab) => {
+		patchLane(laneId, (lane) => ({ ...lane, rightPanelTab: tab }));
+	}, [patchLane]);
 
 	const ensureLaneSession = useCallback(async (lane: ArenaLaneState): Promise<{ sessionId: string; workspaceId: string | null }> => {
 		if (lane.sessionId) return { sessionId: lane.sessionId, workspaceId: lane.workspaceId };
@@ -443,6 +461,7 @@ export function ClaudeArenaApp({ onSwitchChat }: { onSwitchChat?: () => void }) 
 						key={lane.id}
 						lane={lane}
 						workspaceName={lane.workspaceId ? workspaces.find((workspace) => workspace.id === lane.workspaceId)?.name ?? null : null}
+						onTabChange={setLaneTab}
 					/>
 				))}
 			</main>
