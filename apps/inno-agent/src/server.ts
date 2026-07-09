@@ -3399,8 +3399,9 @@ const server = createServer(async (req, res) => {
 
 		// --- Presets API (ready-to-use workspace templates) ---
 		// Local cache listing (offline fallback / already-downloaded presets).
-		if (method === "GET" && url === "/api/presets") {
-			json(res, 200, listPresets(paths));
+		if (method === "GET" && url.split("?")[0] === "/api/presets") {
+			const subfolder = new URL(url, "http://localhost").searchParams.get("subfolder")?.trim() || undefined;
+			json(res, 200, listPresets(paths, subfolder));
 			return;
 		}
 
@@ -3408,7 +3409,13 @@ const server = createServer(async (req, res) => {
 		// Falls back to the bundled/cached presets when the hub is empty or
 		// unreachable, so the shipped templates always appear.
 		if (method === "GET" && url.split("?")[0] === "/api/preset-library") {
-			const forceRefresh = new URL(url, "http://localhost").searchParams.get("refresh") === "1";
+			const requestUrl = new URL(url, "http://localhost");
+			const forceRefresh = requestUrl.searchParams.get("refresh") === "1";
+			const subfolder = requestUrl.searchParams.get("subfolder")?.trim() || undefined;
+			if (subfolder) {
+				json(res, 200, listPresets(paths, subfolder));
+				return;
+			}
 			try {
 				const remote = await listRemotePresets(getContentSource(), forceRefresh);
 				if (remote.length > 0) {

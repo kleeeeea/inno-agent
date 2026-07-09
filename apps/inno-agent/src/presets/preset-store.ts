@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
-import { join, relative } from "node:path";
+import { join, relative, resolve } from "node:path";
 import type { RuntimePaths } from "../runtime.js";
 import type { WorkspaceMeta, WorkspaceRegistry } from "../workspace/workspace-registry.js";
 import type { RemoteContentSource } from "../content-source/index.js";
@@ -40,6 +40,10 @@ const PRESET_ID_RE = /^[a-zA-Z0-9._-]+$/;
 
 function isValidPresetId(id: string): boolean {
 	return PRESET_ID_RE.test(id) && id !== "." && id !== "..";
+}
+
+function isIgnoredPresetEntry(name: string): boolean {
+	return name === "__MACOSX" || name.startsWith(".") || name.startsWith("_");
 }
 
 /** Absolute path to the local preset cache directory. */
@@ -89,21 +93,57 @@ function readPresetMeta(dir: string, id: string): PresetMeta | null {
 	return parsePresetMeta(readFileSync(metaPath, "utf-8"), id);
 }
 
+function resolvePresetScanRoot(root: string, subfolder?: string): string | null {
+	if (!subfolder?.trim()) return root;
+	const parts = subfolder.split(/[\\/]+/).filter(Boolean);
+	if (parts.length === 0) return root;
+	if (parts.some((part) => !isValidPresetId(part) || isIgnoredPresetEntry(part))) return null;
+	const resolved = resolve(root, ...parts);
+	const rel = relative(resolve(root), resolved);
+	if (rel.startsWith("..") || resolve(rel) === rel) return null;
+	return resolved;
+}
+
+function collectPresetDirs(root: string, subfolder?: string): Array<{ dir: string; id: string }> {
+	const scanRoot = resolvePresetScanRoot(root, subfolder);
+	const found: Array<{ dir: string; id: string }> = [];
+	if (!scanRoot || !existsSync(scanRoot)) return found;
+
+	const visit = (dir: string): void => {
+		for (const entry of readdirSync(dir, { withFileTypes: true })) {
+			if (!entry.isDirectory()) continue;
+			if (isIgnoredPresetEntry(entry.name)) continue;
+			const child = join(dir, entry.name);
+			if (isValidPresetId(entry.name) && existsSync(join(child, "preset.json"))) {
+				found.push({ dir: child, id: entry.name });
+				continue;
+			}
+			visit(child);
+		}
+	};
+
+	visit(scanRoot);
+	return found;
+}
+
+function findBundledPresetDir(paths: RuntimePaths, id: string): string | null {
+	for (const { dir } of collectPresetDirs(bundledPresetsDir(paths))) {
+		if (readPresetMeta(dir, id)) return dir;
+	}
+	return null;
+}
+
 /**
  * List presets available offline: the union of the local cache and the presets
  * bundled with the app (cache wins on id collision). Best-effort — invalid
  * presets are skipped. Used as a fallback when the remote hub is unreachable.
  */
-export function listPresets(paths: RuntimePaths): PresetMeta[] {
+export function listPresets(paths: RuntimePaths, subfolder?: string): PresetMeta[] {
 	const byId = new Map<string, PresetMeta>();
 	// Bundled first, then cache overrides (a downloaded preset is fresher).
 	for (const root of [bundledPresetsDir(paths), presetsDir(paths)]) {
-		if (!existsSync(root)) continue;
-		for (const entry of readdirSync(root, { withFileTypes: true })) {
-			if (!entry.isDirectory()) continue;
-			if (entry.name === "__MACOSX" || entry.name.startsWith(".") || entry.name.startsWith("_")) continue;
-			if (!isValidPresetId(entry.name)) continue;
-			const meta = readPresetMeta(join(root, entry.name), entry.name);
+		for (const { dir, id } of collectPresetDirs(root, subfolder)) {
+			const meta = readPresetMeta(dir, id);
 			if (meta) byId.set(meta.id, meta);
 		}
 	}
@@ -169,8 +209,8 @@ export async function ensurePresetCached(
 	// DO_SKIP_REMOTE：完全不碰远端。随包目录里有就每次重新播种缓存（这样直接改
 	// apps/inno-agent/presets 里的文件无需清缓存即可生效），没有再退回已有缓存。
 	if (DO_SKIP_REMOTE) {
-		const bundledDir = join(bundledPresetsDir(paths), id);
-		if (existsSync(join(bundledDir, "preset.json"))) {
+		const bundledDir = findBundledPresetDir(paths, id);
+		if (bundledDir) {
 			copyPresetContents(bundledDir, cacheDir);
 			// copyPresetContents skips preset.json, so copy it explicitly.
 			writeFileSync(join(cacheDir, "preset.json"), readFileSync(join(bundledDir, "preset.json")));
@@ -194,8 +234,8 @@ export async function ensurePresetCached(
 	} catch (err) {
 		// Fall back to a preset bundled with the app, if one exists. Lets the
 		// shipped templates work offline / before the hub has them.
-		const bundledDir = join(bundledPresetsDir(paths), id);
-		if (existsSync(join(bundledDir, "preset.json"))) {
+		const bundledDir = findBundledPresetDir(paths, id);
+		if (bundledDir) {
 			copyPresetContents(bundledDir, cacheDir);
 			// copyPresetContents skips preset.json, so copy it explicitly.
 			writeFileSync(join(cacheDir, "preset.json"), readFileSync(join(bundledDir, "preset.json")));
