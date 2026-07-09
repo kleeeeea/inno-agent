@@ -14,7 +14,7 @@
 		"sandbox": "npm --workspace inno-agent run start -- --sandbox",
 		"server": "npm --workspace inno-agent run server --",
 		"server:sandbox": "npm --workspace inno-agent run server -- --sandbox",
-		"web:dev": "npm --workspace inno-agent-web run dev",
+		"hihiweb:dev": "npm --workspace inno-agent-web run dev",
 		"dev:server": "npm --workspace inno-agent run server --",
 		"restart": "bash restart-dev.sh",
 		"restart:fast": "bash restart-dev.sh --skip-build",
