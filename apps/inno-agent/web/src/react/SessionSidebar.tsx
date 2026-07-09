@@ -26,6 +26,8 @@ import type { WorkspaceMeta } from "../api/workspaces.js";
 import type { SessionChannel, SessionMeta } from "../api/sessions.js";
 import { useStoreSnapshot } from "./hooks.js";
 import { Spinner } from "./ui/Spinner.js";
+import { themeStore } from "../stores/theme-store.js";
+import { getBrandInitials, getBrandName } from "../brand.js";
 
 interface SessionSidebarProps {
 	collapsed: boolean;
@@ -405,6 +407,8 @@ export function SessionSidebar({ collapsed }: SessionSidebarProps) {
 		activeWorkspaceId: workspaceStore.activeWorkspaceId,
 	}));
 	const simpleMode = useStoreSnapshot(settingsStore, () => settingsStore.settings?.simpleMode?.enabled === true);
+	// 品牌名随主题切换（Claude 皮肤 → EduAgentArena）
+	const brand = useStoreSnapshot(themeStore, () => ({ name: getBrandName(), initials: getBrandInitials() }));
 	const [togglingMode, setTogglingMode] = useState(false);
 
 	// Toggle Simple/Normal mode from the top-left logo (flip animation).
@@ -646,17 +650,17 @@ export function SessionSidebar({ collapsed }: SessionSidebarProps) {
 								<span
 									className="flip-card-face absolute inset-0 flex items-center justify-center rounded-lg border border-[var(--inno-border)] bg-[var(--inno-surface)] text-[10px] font-semibold text-[var(--inno-text)] shadow-sm"
 								>
-									IA
+									{brand.initials}
 								</span>
 								<span
 									className="flip-card-back absolute inset-0 flex items-center justify-center rounded-lg border border-[var(--inno-accent)] bg-[var(--inno-accent)] text-[10px] font-semibold text-white shadow-sm"
 								>
-									IA
+									{brand.initials}
 								</span>
 							</motion.div>
 						</button>
 						<h1 className="inno-sidebar-title truncate font-semibold tracking-tight text-[var(--inno-text)]">
-							Inno Agent
+							{brand.name}
 						</h1>
 					</div>
 					<button
@@ -766,18 +770,18 @@ export function SessionSidebar({ collapsed }: SessionSidebarProps) {
 								<span
 									className="flip-card-face absolute inset-0 flex items-center justify-center rounded-lg border border-[var(--inno-border)] bg-[var(--inno-surface)] text-[10px] font-semibold text-[var(--inno-text)] shadow-sm"
 								>
-									IA
+									{brand.initials}
 								</span>
 								<span
 									className="flip-card-back absolute inset-0 flex items-center justify-center rounded-lg border border-[var(--inno-accent)] bg-[var(--inno-accent)] text-[10px] font-semibold text-white shadow-sm"
 								>
-									IA
+									{brand.initials}
 								</span>
 							</motion.div>
 						</button>
 						<div className="min-w-0">
 							<h1 className="inno-sidebar-title font-semibold tracking-tight text-[var(--inno-text)]">
-								Inno Agent{simpleMode ? <span className="font-normal text-[var(--inno-accent)]">{t("mode.simpleTag")}</span> : null}
+								{brand.name}{simpleMode ? <span className="font-normal text-[var(--inno-accent)]">{t("mode.simpleTag")}</span> : null}
 							</h1>
 						</div>
 					</div>

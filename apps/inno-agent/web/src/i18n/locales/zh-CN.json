@@ -321,7 +321,7 @@
 		"package": "默认包格式：",
 		"packageDesc": "ZIP 包内需包含 SKILL.md 文件。",
 		"empty": "暂无技能",
-		"emptyDesc": "上传 <skill-name>.zip，Inno Agent 会自动解压并加载。",
+		"emptyDesc": "上传 <skill-name>.zip，{{brand}} 会自动解压并加载。",
 		"noDescription": "暂无描述",
 		"loaded": "已加载",
 		"notLoaded": "未加载",
@@ -433,7 +433,8 @@
 			"light": "浅色",
 			"warm": "暖色",
 			"ocean": "海洋",
-			"innospark": "启创"
+			"innospark": "启创",
+			"claude": "Claude"
 		},
 		"channels": {
 			"title": "消息渠道",

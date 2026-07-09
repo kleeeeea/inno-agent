@@ -55,6 +55,15 @@ const TERMINAL_THEMES: Record<ThemeId, ITheme> = {
 		brightYellow: "#f5b62f", brightBlue: "#6b70ff", brightMagenta: "#8b70ff",
 		brightCyan: "#8291ff", brightWhite: "#191922",
 	},
+	claude: {
+		background: "#faf9f5", foreground: "#2b2a27", cursor: "#c96442",
+		cursorAccent: "#faf9f5", selectionBackground: "#e8ddd0",
+		black: "#2b2a27", red: "#c0392b", green: "#6a994e", yellow: "#c98a1a",
+		blue: "#c96442", magenta: "#9333ea", cyan: "#0d9488", white: "#6e6a5f",
+		brightBlack: "#969181", brightRed: "#e05d4a", brightGreen: "#84b56a",
+		brightYellow: "#e0a53a", brightBlue: "#d97757", brightMagenta: "#a855f7",
+		brightCyan: "#14b8a6", brightWhite: "#2b2a27",
+	},
 };
 
 /**

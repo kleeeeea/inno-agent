@@ -22,6 +22,8 @@ import { normalizeMarkdownMath } from "../utils/markdown-math.js";
 import { groupByCategory, matchesQuery } from "../utils/category-grouping.js";
 import { useStoreSnapshot } from "./hooks.js";
 import { QuestionDialog } from "./QuestionDialog.js";
+import { themeStore } from "../stores/theme-store.js";
+import { getBrandInitials, getBrandName } from "../brand.js";
 import "@earendil-works/pi-web-ui";
 
 // Thresholds for collapsing a large paste into a placeholder chip. A paste
@@ -358,6 +360,8 @@ export function ChatCenter() {
 
 	// Simple Mode surfaces preset workspaces for one-click start.
 	const simpleMode = useStoreSnapshot(settingsStore, () => settingsStore.settings?.simpleMode?.enabled === true);
+	// 品牌名随主题切换（Claude 皮肤 → EduAgentArena）
+	const brand = useStoreSnapshot(themeStore, () => ({ name: getBrandName(), initials: getBrandInitials() }));
 	const [presets, setPresets] = useState<PresetMeta[]>([]);
 	const [openingPresetId, setOpeningPresetId] = useState<string | null>(null);
 	const [togglingMode, setTogglingMode] = useState(false);
@@ -838,17 +842,17 @@ export function ChatCenter() {
 									<span
 										className="flip-card-face absolute inset-0 flex items-center justify-center rounded-xl border border-[var(--inno-border)] bg-[var(--inno-surface)] text-base font-semibold text-[var(--inno-accent)] shadow-sm transition-colors hover:border-[var(--inno-accent)]"
 									>
-										IA
+										{brand.initials}
 									</span>
 									{/* Back — Simple mode */}
 									<span
 										className="flip-card-back absolute inset-0 flex items-center justify-center rounded-xl border border-[var(--inno-accent)] bg-[var(--inno-accent)] text-base font-semibold text-white shadow-sm"
 									>
-										IA
+										{brand.initials}
 									</span>
 								</motion.div>
 							</button>
-							<h2 className="text-lg font-medium text-[var(--inno-text)]">Inno Agent</h2>
+							<h2 className="text-lg font-medium text-[var(--inno-text)]">{brand.name}</h2>
 							{/* Explicit, labeled mode switch (P4): the flip logo above is a nice
 							    secondary affordance, but a worded pill makes the toggle
 							    discoverable instead of hidden behind an icon click. */}

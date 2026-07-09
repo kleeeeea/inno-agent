@@ -17,8 +17,17 @@ if ! command -v npm >/dev/null 2>&1 && [ -s "$HOME/.nvm/nvm.sh" ]; then
   . "$HOME/.nvm/nvm.sh"
   set -u
 fi
+# nvm 的 default alias 坏掉（指向未安装版本）时 nvm.sh 不会把 node 加进 PATH，
+# 直接把已安装的最新 node 的 bin 目录塞进 PATH 兜底
 if ! command -v npm >/dev/null 2>&1; then
-  echo "错误：npm 不在 PATH（这个终端没加载 nvm？先执行：source ~/.nvm/nvm.sh）"
+  NODE_BIN="$(ls -d "$HOME"/.nvm/versions/node/*/bin 2>/dev/null | sort -V | tail -1)"
+  if [ -n "${NODE_BIN}" ]; then
+    export PATH="${NODE_BIN}:${PATH}"
+    echo "PATH 里没有 node/npm，已兜底使用：${NODE_BIN}"
+  fi
+fi
+if ! command -v npm >/dev/null 2>&1; then
+  echo "错误：npm 不在 PATH（nvm 没装或没装任何 node 版本）"
   exit 1
 fi
 

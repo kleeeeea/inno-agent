@@ -433,7 +433,8 @@
 			"light": "Light",
 			"warm": "Warm",
 			"ocean": "Ocean",
-			"innospark": "InnoSpark"
+			"innospark": "InnoSpark",
+			"claude": "Claude"
 		},
 		"channels": {
 			"title": "Channels",

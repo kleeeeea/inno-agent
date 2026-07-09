@@ -1,8 +1,8 @@
 import { EventEmitter } from "./event-emitter.js";
 
-export type ThemeId = "light" | "warm" | "ocean" | "innospark";
+export type ThemeId = "light" | "warm" | "ocean" | "innospark" | "claude";
 
-export const THEME_IDS: ThemeId[] = ["light", "innospark", "warm", "ocean"];
+export const THEME_IDS: ThemeId[] = ["light", "innospark", "warm", "ocean", "claude"];
 const DARK_THEMES: Set<ThemeId> = new Set();
 const STORAGE_KEY = "inno.theme";
 
@@ -12,6 +12,7 @@ export const THEME_PREVIEW_COLORS: Record<ThemeId, string> = {
 	warm: "#faf8f5",
 	ocean: "#f0f4f8",
 	innospark: "#555aff",
+	claude: "#c96442",
 };
 
 interface ThemeStoreEvents {
@@ -25,7 +26,8 @@ function isValidTheme(v: string | null): v is ThemeId {
 function getInitialTheme(): ThemeId {
 	const saved = localStorage.getItem(STORAGE_KEY);
 	if (isValidTheme(saved)) return saved;
-	return "light";
+	// 无本地偏好时默认使用 Claude 皮肤
+	return "claude";
 }
 
 function applyThemeToDOM(id: ThemeId): void {

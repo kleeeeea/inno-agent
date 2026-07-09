@@ -28,6 +28,7 @@ import { groupByCategory, matchesQuery } from "../utils/category-grouping.js";
 import { useStoreSnapshot } from "./hooks.js";
 import { checkboxCls } from "./ui/checkbox.js";
 import { Spinner } from "./ui/Spinner.js";
+import { getBrandName } from "../brand.js";
 import "@earendil-works/pi-web-ui";
 import "@uiw/react-md-editor/markdown-editor.css";
 import "@uiw/react-markdown-preview/markdown.css";
@@ -607,7 +608,7 @@ export function SkillsPanel() {
 					) : state.skills.length === 0 ? (
 						<div className="flex h-full flex-col items-center justify-center text-center text-sm text-[var(--inno-text-muted)]">
 							<div className="text-base font-medium text-[var(--inno-text)]">{t("skills.empty")}</div>
-							<p className="mt-1 max-w-sm text-xs">{t("skills.emptyDesc")}</p>
+							<p className="mt-1 max-w-sm text-xs">{t("skills.emptyDesc", { brand: getBrandName() })}</p>
 						</div>
 					) : totalMatched === 0 ? (
 						<div className="flex h-full flex-col items-center justify-center py-12 text-center text-sm text-[var(--inno-text-muted)]">

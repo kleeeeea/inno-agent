@@ -1,6 +1,8 @@
 @import "@earendil-works/pi-web-ui/app.css";
 @import "tailwindcss";
 @import "./themes.css";
+/* Claude 皮肤独立成文件，避免膨胀 themes.css */
+@import "./claude-theme.css";
 
 :root {
 	--inno-background: #f6f8fa;

@@ -14,6 +14,15 @@ if ! command -v pnpm >/dev/null 2>&1 && [ -s "$HOME/.nvm/nvm.sh" ]; then
   . "$HOME/.nvm/nvm.sh"
   set -u
 fi
+# nvm 的 default alias 坏掉（指向未安装版本）时 nvm.sh 不会把 node 加进 PATH，
+# 直接把已安装的最新 node 的 bin 目录塞进 PATH 兜底
+if ! command -v npm >/dev/null 2>&1; then
+  NODE_BIN="$(ls -d "$HOME"/.nvm/versions/node/*/bin 2>/dev/null | sort -V | tail -1)"
+  if [ -n "${NODE_BIN}" ]; then
+    export PATH="${NODE_BIN}:${PATH}"
+    echo "PATH 里没有 node/npm，已兜底使用：${NODE_BIN}"
+  fi
+fi
 # pnpm 找不到就回退 npm（本仓库本来就是 npm workspaces，package-lock.json 在）
 if command -v pnpm >/dev/null 2>&1; then
   PKG=pnpm
