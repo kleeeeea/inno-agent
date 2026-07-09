@@ -93,7 +93,7 @@ function ImageLightbox({ src, onClose }: { src: string; onClose: () => void }) {
  * default and reveals the full backend message when expanded, so users know
  * something failed instead of seeing a silent dead end.
  */
-function ErrorBlock({ error }: { error: string }) {
+export function ErrorBlock({ error }: { error: string }) {
 	const isLong = error.length > 80 || error.includes("\n");
 	return (
 		<details className="rounded-md border border-[var(--inno-danger-border)] bg-[var(--inno-danger-bg)] px-2.5 py-1.5 text-xs text-[var(--inno-danger)]" open={!isLong}>
@@ -107,7 +107,7 @@ function ErrorBlock({ error }: { error: string }) {
 	);
 }
 
-function MessageBubble({ message, showChannel }: { message: ChatMessage; showChannel?: boolean }) {
+export function MessageBubble({ message, showChannel }: { message: ChatMessage; showChannel?: boolean }) {
 	const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
 	if (message.role === "user") {
