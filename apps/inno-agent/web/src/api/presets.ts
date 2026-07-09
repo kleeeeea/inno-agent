@@ -10,4 +10,3 @@ export async function listPresets(): Promise<PresetMeta[]> {
 export async function listRemotePresets(forceRefresh = false): Promise<PresetMeta[]> {
 	return apiFetch<PresetMeta[]>(`/api/preset-library${forceRefresh ? "?refresh=1" : ""}`);
 }
-
