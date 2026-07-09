@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { MessageSquare, RefreshCw, SendHorizonal, Swords } from "lucide-react";
-import { createSession } from "../api/sessions.js";
+import { List, MessageSquare, PlusCircle, RefreshCw, Search, SendHorizonal, Swords } from "lucide-react";
+import { createSession, getSession } from "../api/sessions.js";
+import type { SessionMeta } from "../api/sessions.js";
 import { streamChat } from "../api/chat.js";
 import type { ChatMessage, ChatStreamEvent, ChatToolRecord } from "../types/chat.js";
 import { normalizeMarkdownMath } from "../utils/markdown-math.js";
@@ -11,10 +12,22 @@ import type { RightPanelTab } from "../stores/app-store.js";
 import { WorkspaceStoreImpl } from "../stores/workspace-store.js";
 import { sessionsStore } from "../stores/sessions-store.js";
 import { workspacesStore } from "../stores/workspaces-store.js";
+import { arenaStore } from "../stores/arena-store.js";
 import { useStoreSnapshot } from "./hooks.js";
 import "@earendil-works/pi-web-ui";
 
 type ArenaLaneId = "top" | "bottom";
+
+interface ArenaHistory {
+	key: string;
+	label: string;
+	aWorkspaceId: string;
+	bWorkspaceId: string;
+	aSessionId: string | null;
+	bSessionId: string | null;
+	updatedAt: string;
+	preview: string;
+}
 
 interface ArenaLaneState {
 	id: ArenaLaneId;
@@ -41,6 +54,44 @@ function createInitialLanes(): ArenaLaneState[] {
 
 function isArenaGeneratedWorkspace(id: string): boolean {
 	return id.startsWith("arena-a-") || id.startsWith("arena-b-");
+}
+
+function arenaHistoryKey(name: string): { side: "a" | "b"; key: string } | null {
+	const match = name.match(/^Arena\s+([AB])\s+(.+)$/i);
+	if (!match) return null;
+	return { side: match[1].toLowerCase() as "a" | "b", key: match[2] };
+}
+
+function buildArenaHistories(
+	workspaces: ReturnType<typeof workspacesStore.getById>[],
+	sessions: SessionMeta[],
+): ArenaHistory[] {
+	const sessionById = new Map(sessions.map((session) => [session.id, session]));
+	const pairs = new Map<string, Partial<ArenaHistory>>();
+	for (const workspace of workspaces) {
+		if (!workspace || !isArenaGeneratedWorkspace(workspace.id)) continue;
+		const parsed = arenaHistoryKey(workspace.name);
+		if (!parsed) continue;
+		const existing = pairs.get(parsed.key) ?? { key: parsed.key, label: parsed.key, preview: "", updatedAt: workspace.updatedAt };
+		const sessionId = workspace.sessionIds?.[0] ?? null;
+		const session = sessionId ? sessionById.get(sessionId) : undefined;
+		const next: Partial<ArenaHistory> = {
+			...existing,
+			updatedAt: Date.parse(workspace.updatedAt) > Date.parse(existing.updatedAt ?? "") ? workspace.updatedAt : existing.updatedAt,
+			preview: existing.preview || session?.preview || "",
+		};
+		if (parsed.side === "a") {
+			next.aWorkspaceId = workspace.id;
+			next.aSessionId = sessionId;
+		} else {
+			next.bWorkspaceId = workspace.id;
+			next.bSessionId = sessionId;
+		}
+		pairs.set(parsed.key, next);
+	}
+	return Array.from(pairs.values())
+		.filter((history): history is ArenaHistory => Boolean(history.aWorkspaceId && history.bWorkspaceId))
+		.sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
 }
 
 function createInitialLane(id: ArenaLaneId, title: string): ArenaLaneState {
@@ -167,6 +218,88 @@ function ArenaLaneSidebar({ lane, workspaceName }: { lane: ArenaLaneState; works
 	);
 }
 
+function ArenaHistorySidebar({
+	histories,
+	onOpen,
+	onNew,
+	query,
+	onQueryChange,
+}: {
+	histories: ArenaHistory[];
+	onOpen: (history: ArenaHistory) => void;
+	onNew: () => void;
+	query: string;
+	onQueryChange: (query: string) => void;
+}) {
+	const filtered = histories.filter((history) => {
+		const q = query.trim().toLowerCase();
+		if (!q) return true;
+		return history.label.toLowerCase().includes(q) || history.preview.toLowerCase().includes(q);
+	});
+	return (
+		<aside className="flex h-screen w-64 shrink-0 flex-col border-r border-[var(--inno-border)] bg-[var(--inno-sidebar-bg)] text-sm">
+			<div className="flex h-12 items-center gap-2 border-b border-[var(--inno-border)] px-4">
+				<div className="flex h-7 w-7 items-center justify-center rounded-md bg-[var(--inno-accent)] text-xs font-semibold text-white">EA</div>
+				<div className="min-w-0 flex-1 truncate font-semibold text-[var(--inno-text)]">EduAgentArena</div>
+			</div>
+			<div className="space-y-1 border-b border-[var(--inno-border)] p-3">
+				<button
+					type="button"
+					className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[var(--inno-text)] hover:bg-[var(--inno-surface)]"
+					onClick={onNew}
+				>
+					<PlusCircle size={15} />
+					New Battle
+				</button>
+				<div className="flex items-center gap-2 rounded-md px-2 py-1.5 text-[var(--inno-text-muted)]">
+					<List size={15} />
+					Battle History
+				</div>
+				<label className="flex items-center gap-2 rounded-md border border-[var(--inno-border)] bg-[var(--inno-surface)] px-2 py-1.5 text-[var(--inno-text-muted)]">
+					<Search size={14} />
+					<input
+						value={query}
+						onChange={(event) => onQueryChange(event.target.value)}
+						placeholder="Search"
+						className="min-w-0 flex-1 bg-transparent text-xs text-[var(--inno-text)] outline-none placeholder:text-[var(--inno-text-subtle)]"
+					/>
+				</label>
+			</div>
+			<div className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
+				<div className="mb-2 px-2 text-[10px] font-medium uppercase tracking-wide text-[var(--inno-text-subtle)]">
+					Previous Battles
+				</div>
+				{filtered.length === 0 ? (
+					<div className="px-2 py-6 text-xs text-[var(--inno-text-subtle)]">
+						{histories.length === 0 ? "No previous battles yet." : "No matching battles."}
+					</div>
+				) : null}
+				<div className="grid gap-1">
+					{filtered.map((history) => (
+					<button
+						key={history.key}
+						type="button"
+						className="rounded-md px-2 py-2 text-left transition-colors hover:bg-[var(--inno-surface)]"
+						onClick={() => onOpen(history)}
+					>
+						<div className="flex items-center gap-2 text-xs">
+							<Swords size={12} className="shrink-0 text-[var(--inno-text-subtle)]" />
+							<span className="min-w-0 flex-1 truncate font-medium text-[var(--inno-text)]">{history.label}</span>
+						</div>
+						{history.preview ? (
+							<div className="mt-1 line-clamp-1 pl-5 text-[10px] text-[var(--inno-text-muted)]">{history.preview}</div>
+						) : null}
+						<div className="mt-0.5 pl-5 text-[10px] text-[var(--inno-text-subtle)]">
+							{new Date(history.updatedAt).toLocaleString()}
+						</div>
+					</button>
+				))}
+				</div>
+			</div>
+		</aside>
+	);
+}
+
 function LanePanel({
 	lane,
 	workspaceName,
@@ -201,7 +334,9 @@ function LanePanel({
 				<div ref={scrollRef} className="chat-scroll min-h-0 flex-1 overflow-y-auto px-4 py-3">
 					<div className="mx-auto flex min-w-0 max-w-4xl flex-col gap-3">
 						{lane.messages.length === 0 && !lane.isSending ? (
-							<div className="pt-8 text-center text-xs text-[var(--inno-text-subtle)]">Waiting for the shared arena prompt.</div>
+							<div className="pt-8 text-center text-xs text-[var(--inno-text-subtle)]">
+								Select a previous battle from the sidebar or send a new shared arena prompt.
+							</div>
 						) : null}
 						{lane.messages.map((message, index) => (
 							<MessageBubble key={`${message.timestamp}-${index}`} message={message} />
@@ -293,11 +428,14 @@ export function ClaudeArenaApp({ onSwitchChat }: { onSwitchChat?: () => void }) 
 	const [lanes, setLanes] = useState<ArenaLaneState[]>(() => createInitialLanes());
 	const [error, setError] = useState("");
 	const workspaces = useStoreSnapshot(workspacesStore, () => workspacesStore.workspaces);
+	const sessions = useStoreSnapshot(sessionsStore, () => sessionsStore.sessions);
 	const sourceWorkspaces = useMemo(
 		() => workspaces.filter((workspace) => !workspace.isTemp && !workspace.id.startsWith("channel-") && !isArenaGeneratedWorkspace(workspace.id)),
 		[workspaces],
 	);
+	const arenaHistories = useMemo(() => buildArenaHistories(workspaces, sessions), [workspaces, sessions]);
 	const [sourceWorkspaceId, setSourceWorkspaceId] = useState("");
+	const [historyQuery, setHistoryQuery] = useState("");
 	const isSending = lanes.some((lane) => lane.isSending);
 
 	useEffect(() => {
@@ -318,6 +456,41 @@ export function ClaudeArenaApp({ onSwitchChat }: { onSwitchChat?: () => void }) 
 	const setLaneTab = useCallback((laneId: ArenaLaneId, tab: RightPanelTab) => {
 		patchLane(laneId, (lane) => ({ ...lane, rightPanelTab: tab }));
 	}, [patchLane]);
+
+	const openArenaHistory = useCallback((history: ArenaHistory) => {
+		if (isSending) return;
+		setError("");
+		void (async () => {
+			try {
+				const [aDetail, bDetail] = await Promise.all([
+					history.aSessionId ? getSession(history.aSessionId) : Promise.resolve(null),
+					history.bSessionId ? getSession(history.bSessionId) : Promise.resolve(null),
+				]);
+				const aStore = new WorkspaceStoreImpl();
+				const bStore = new WorkspaceStoreImpl();
+				void aStore.setActiveWorkspace(history.aWorkspaceId);
+				void bStore.setActiveWorkspace(history.bWorkspaceId);
+				setLanes([
+					{
+						...createInitialLane("top", "Arena A"),
+						sessionId: history.aSessionId,
+						workspaceId: history.aWorkspaceId,
+						messages: aDetail?.messages ?? [],
+						workspaceStore: aStore,
+					},
+					{
+						...createInitialLane("bottom", "Arena B"),
+						sessionId: history.bSessionId,
+						workspaceId: history.bWorkspaceId,
+						messages: bDetail?.messages ?? [],
+						workspaceStore: bStore,
+					},
+				]);
+			} catch (err) {
+				setError(err instanceof Error ? err.message : "Failed to load arena history");
+			}
+		})();
+	}, [isSending]);
 
 	const ensureLaneSession = useCallback(async (lane: ArenaLaneState): Promise<{ sessionId: string; workspaceId: string | null }> => {
 		if (lane.sessionId) return { sessionId: lane.sessionId, workspaceId: lane.workspaceId };
@@ -369,19 +542,45 @@ export function ClaudeArenaApp({ onSwitchChat }: { onSwitchChat?: () => void }) 
 		}
 	}, [ensureLaneSession, patchLane]);
 
-	const sendSharedPrompt = useCallback(() => {
-		const prompt = inputRef.current?.value.trim() ?? "";
+	/** 把同一条 prompt 同时发给两条 lane（共享的核心发送路径）。 */
+	const dispatchPrompt = useCallback((prompt: string) => {
 		if (!prompt || isSending) return;
 		setError("");
-		if (inputRef.current) {
-			inputRef.current.value = "";
-			inputRef.current.style.height = "auto";
-		}
 		const snapshot = lanes;
 		void Promise.all(snapshot.map((lane) => runLane(lane, prompt))).catch((err) => {
 			setError(err instanceof Error ? err.message : "Failed to send arena prompt");
 		});
 	}, [isSending, lanes, runLane]);
+
+	const sendSharedPrompt = useCallback(() => {
+		const prompt = inputRef.current?.value.trim() ?? "";
+		if (!prompt || isSending) return;
+		if (inputRef.current) {
+			inputRef.current.value = "";
+			inputRef.current.style.height = "auto";
+		}
+		dispatchPrompt(prompt);
+	}, [isSending, dispatchPrompt]);
+
+	// 从聊天欢迎屏"预约进场"带过来的首条 prompt：等 Source 工作区默认值就绪后
+	// 自动双发一次（consumePendingPrompt 是一次性的，天然防 StrictMode 重复副作用）
+	const isLoadingWorkspaces = useStoreSnapshot(workspacesStore, () => workspacesStore.isLoading);
+	const sawWorkspacesLoadRef = useRef(false);
+	const autoLaunchedRef = useRef(false);
+	useEffect(() => {
+		if (isLoadingWorkspaces) {
+			sawWorkspacesLoadRef.current = true;
+			return;
+		}
+		if (autoLaunchedRef.current) return;
+		// 就绪条件：已选出默认 Source 工作区；或确认加载完成后确实没有可选工作区
+		const ready = sourceWorkspaceId !== ""
+			|| (sawWorkspacesLoadRef.current && !isLoadingWorkspaces && sourceWorkspaces.length === 0);
+		if (!ready) return;
+		autoLaunchedRef.current = true;
+		const pending = arenaStore.consumePendingPrompt();
+		if (pending) dispatchPrompt(pending);
+	}, [sourceWorkspaceId, isLoadingWorkspaces, sourceWorkspaces.length, dispatchPrompt]);
 
 	const resetArenaLanes = useCallback(() => {
 		if (isSending) return;
@@ -405,7 +604,15 @@ export function ClaudeArenaApp({ onSwitchChat }: { onSwitchChat?: () => void }) 
 	}, [sendSharedPrompt]);
 
 	return (
-		<div className="claude-arena flex h-screen min-h-0 flex-col bg-[var(--inno-background)] text-[var(--inno-text)]">
+		<div className="claude-arena flex h-screen min-h-0 bg-[var(--inno-background)] text-[var(--inno-text)]">
+			<ArenaHistorySidebar
+				histories={arenaHistories}
+				onOpen={openArenaHistory}
+				onNew={resetArenaLanes}
+				query={historyQuery}
+				onQueryChange={setHistoryQuery}
+			/>
+			<div className="flex min-h-0 min-w-0 flex-1 flex-col">
 			<header className="flex h-10 shrink-0 items-center gap-3 border-b border-[var(--inno-border)] bg-[var(--inno-surface)] px-4">
 				<div className="flex h-6 w-6 items-center justify-center rounded-md bg-[var(--inno-accent)] text-xs font-semibold text-white">EA</div>
 				<h1 className="text-sm font-semibold">EduAgentArena</h1>
@@ -489,6 +696,7 @@ export function ClaudeArenaApp({ onSwitchChat }: { onSwitchChat?: () => void }) 
 					</div>
 				</div>
 			</footer>
+			</div>
 		</div>
 	);
 }

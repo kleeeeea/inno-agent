@@ -23,6 +23,7 @@ import { groupByCategory, matchesQuery } from "../utils/category-grouping.js";
 import { useStoreSnapshot } from "./hooks.js";
 import { QuestionDialog } from "./QuestionDialog.js";
 import { themeStore } from "../stores/theme-store.js";
+import { arenaStore } from "../stores/arena-store.js";
 import { getBrandInitials, getBrandName } from "../brand.js";
 import "@earendil-works/pi-web-ui";
 
@@ -557,6 +558,15 @@ export function ChatCenter() {
 			}
 			setPasteBlock(null);
 		};
+
+		// Arena 预约中：欢迎屏的第一条消息不走普通聊天，改为带着 prompt 进入上下分屏竞技场
+		if (isWelcome && arenaStore.armed) {
+			resetComposer();
+			setUploads([]);
+			setInlineImages([]);
+			arenaStore.launch(messageContent);
+			return;
+		}
 
 		if (isWelcome) {
 			const wsInput = buildSessionInput();

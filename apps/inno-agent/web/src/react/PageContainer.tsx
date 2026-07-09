@@ -2,6 +2,8 @@ import { StrictMode, useCallback, useEffect, useState, type ReactNode } from "re
 import { MessageSquare, Swords } from "lucide-react";
 import { settingsStore } from "../stores/settings-store.js";
 import { themeStore, type ThemeId } from "../stores/theme-store.js";
+import { arenaStore } from "../stores/arena-store.js";
+import { sessionsStore } from "../stores/sessions-store.js";
 import { useStoreSnapshot } from "./hooks.js";
 import { ClaudeArenaApp } from "./ClaudeArenaApp.js";
 
@@ -27,6 +29,8 @@ function readClaudeViewMode(): ClaudeViewMode {
 export function PageContainer({ children }: { children: ReactNode }) {
 	const theme = useStoreSnapshot(themeStore, () => themeStore.current);
 	const [claudeMode, setClaudeMode] = useState<ClaudeViewMode>(() => readClaudeViewMode());
+	// 欢迎屏上点了 Arena 但还没发送——toggle 高亮 Arena，界面仍停留在聊天欢迎屏
+	const arenaArmed = useStoreSnapshot(arenaStore, () => arenaStore.armed);
 
 	useEffect(() => {
 		void settingsStore.load();
@@ -44,6 +48,20 @@ export function PageContainer({ children }: { children: ReactNode }) {
 		localStorage.setItem(CLAUDE_VIEW_MODE_KEY, mode);
 	}, []);
 
+	// 欢迎屏发送触发 launch（带首条 prompt）后才真正切进 Arena 分屏
+	useEffect(() => {
+		return arenaStore.on("change", () => {
+			if (arenaStore.pendingPrompt) switchClaudeMode("arena");
+		});
+	}, [switchClaudeMode]);
+
+	// 用户离开欢迎屏（比如点开旧会话）时自动取消 Arena 预约，避免 toggle 状态悬空
+	useEffect(() => {
+		return sessionsStore.on("change", () => {
+			if (arenaStore.armed && !sessionsStore.isWelcomeView) arenaStore.disarm();
+		});
+	}, []);
+
 	return (
 		<StrictMode>
 			<div
@@ -58,15 +76,24 @@ export function PageContainer({ children }: { children: ReactNode }) {
 							<div className="fixed right-4 top-3 z-50 inline-flex rounded-md border border-[var(--inno-border)] bg-[var(--inno-surface-muted)] p-0.5 shadow-[var(--inno-shadow-soft)]">
 								<button
 									type="button"
-									className="inline-flex items-center gap-1 rounded bg-[var(--inno-surface)] px-2 py-1 text-xs font-medium text-[var(--inno-accent)] shadow-sm"
+									className={arenaArmed
+										? "inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-[var(--inno-text-muted)] hover:text-[var(--inno-accent)]"
+										: "inline-flex items-center gap-1 rounded bg-[var(--inno-surface)] px-2 py-1 text-xs font-medium text-[var(--inno-accent)] shadow-sm"}
+									onClick={() => arenaStore.disarm()}
 								>
 									<MessageSquare size={13} />
 									Chat
 								</button>
 								<button
 									type="button"
-									className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-[var(--inno-text-muted)] hover:text-[var(--inno-accent)]"
-									onClick={() => switchClaudeMode("arena")}
+									className={arenaArmed
+										? "inline-flex items-center gap-1 rounded bg-[var(--inno-surface)] px-2 py-1 text-xs font-medium text-[var(--inno-accent)] shadow-sm"
+										: "inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-[var(--inno-text-muted)] hover:text-[var(--inno-accent)]"}
+									onClick={() => {
+										// 欢迎屏：只预约，等首条消息发送时再进 Arena；其它场景保持原来的立即切换
+										if (sessionsStore.isWelcomeView) arenaStore.arm();
+										else switchClaudeMode("arena");
+									}}
 								>
 									<Swords size={13} />
 									Arena
