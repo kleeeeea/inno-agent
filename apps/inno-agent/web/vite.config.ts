@@ -125,11 +125,11 @@ export default defineConfig({
 		port: 5173,
 		proxy: {
 			"/api": {
-				target: "http://localhost:3000",
+				target: `http://localhost:${process.env.INNO_BACKEND_PORT || 3000}`,
 				changeOrigin: true,
 				ws: true,
 			},
-			"/health": "http://localhost:3000",
+			"/health": `http://localhost:${process.env.INNO_BACKEND_PORT || 3000}`,
 		},
 	},
 	build: {

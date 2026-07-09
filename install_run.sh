@@ -7,13 +7,30 @@ cd "$(dirname "$0")"
 # 端口可通过第一个参数指定，默认 3000
 PORT="${1:-3000}"
 
-which pnpm
+# pnpm/node 由 nvm 提供；有的终端 pane 没加载 nvm，会导致 which pnpm 静默失败 + set -e 直接退出
+# （现象：脚本无任何输出、退出码 1）。这里主动加载 nvm 兜底
+if ! command -v pnpm >/dev/null 2>&1 && [ -s "$HOME/.nvm/nvm.sh" ]; then
+  set +u  # nvm.sh 里有未定义变量，临时关掉 -u
+  . "$HOME/.nvm/nvm.sh"
+  set -u
+fi
+# pnpm 找不到就回退 npm（本仓库本来就是 npm workspaces，package-lock.json 在）
+if command -v pnpm >/dev/null 2>&1; then
+  PKG=pnpm
+elif command -v npm >/dev/null 2>&1; then
+  PKG=npm
+  echo "未找到 pnpm，回退使用 npm"
+else
+  echo "错误：pnpm 和 npm 都不在 PATH（这个终端没加载 nvm？先执行：source ~/.nvm/nvm.sh）"
+  exit 1
+fi
+echo "使用包管理器：$(command -v "$PKG")"
 # 安装依赖（会从 npm 拉 Pi SDK；lockfile 没变时秒级完成）
-pnpm install
+"$PKG" install
 
 # 编译 backend + 前端（约 15s）：dist 已存在时默认跳过，改了代码后用 BUILD=1 强制重新编译
 if [ "${BUILD:-0}" = "1" ] || [ ! -f apps/inno-agent/dist/server.js ] || [ ! -f apps/inno-agent/web/dist/index.html ]; then
-  pnpm run build
+  "$PKG" run build
 else
   echo "跳过编译（dist 已存在）；改了代码请用 BUILD=1 bash install_run.sh 重新编译"
 fi
@@ -28,12 +45,17 @@ if grep -q '"apiKey": *"replace-me"' runtime/config/config.json 2>/dev/null; the
   echo "警告：runtime/config/config.json 的 apiKey 还是占位符 replace-me，agent 将无法调用模型"
 fi
 
-# 端口占用预检查，避免启动到一半才报 EADDRINUSE
+# 端口占用预检查，避免启动到一半才报 EADDRINUSE：占用时直接 kill 掉占用进程
 if lsof -nP -iTCP:"${PORT}" -sTCP:LISTEN >/dev/null 2>&1; then
-  echo "错误：端口 ${PORT} 已被占用："
+  echo "端口 ${PORT} 已被占用，kill 掉占用进程："
   lsof -nP -iTCP:"${PORT}" -sTCP:LISTEN
-  echo "换个端口运行：bash install_run.sh $((PORT + 1))"
-  exit 1
+  lsof -nP -tiTCP:"${PORT}" -sTCP:LISTEN | xargs kill 2>/dev/null || true
+  sleep 1
+  # 还没退出就强杀
+  if lsof -nP -iTCP:"${PORT}" -sTCP:LISTEN >/dev/null 2>&1; then
+    lsof -nP -tiTCP:"${PORT}" -sTCP:LISTEN | xargs kill -9 2>/dev/null || true
+    sleep 1
+  fi
 fi
 
 echo "启动服务："
