@@ -17,7 +17,7 @@ interface WorkspaceStoreEvents {
 	change: void;
 }
 
-class WorkspaceStoreImpl extends EventEmitter<WorkspaceStoreEvents> {
+export class WorkspaceStoreImpl extends EventEmitter<WorkspaceStoreEvents> {
 	tree: WorkspaceTree | null = null;
 	currentFile: WorkspaceFileDetail | null = null;
 	isLoadingTree = false;

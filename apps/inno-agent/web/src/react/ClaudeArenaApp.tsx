@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { FileText, Folder, MessageSquare, RefreshCw, SendHorizonal, Swords } from "lucide-react";
+import { MessageSquare, RefreshCw, SendHorizonal, Swords } from "lucide-react";
 import { createSession } from "../api/sessions.js";
 import { streamChat } from "../api/chat.js";
-import { getWorkspaceTree } from "../api/workspace.js";
 import type { ChatMessage, ChatStreamEvent, ChatToolRecord } from "../types/chat.js";
-import type { WorkspaceTree, WorkspaceTreeNode } from "../types/workspace.js";
 import { normalizeMarkdownMath } from "../utils/markdown-math.js";
 import { ErrorBlock, MessageBubble } from "./ChatCenter.js";
 import { Spinner } from "./ui/Spinner.js";
+import { WorkspaceBrowser } from "./WorkspaceBrowser.js";
+import { WorkspaceStoreImpl } from "../stores/workspace-store.js";
 import { sessionsStore } from "../stores/sessions-store.js";
 import { workspacesStore } from "../stores/workspaces-store.js";
 import { useStoreSnapshot } from "./hooks.js";
@@ -27,9 +27,7 @@ interface ArenaLaneState {
 	streamingError: string;
 	activeTools: ChatToolRecord[];
 	completedTools: ChatToolRecord[];
-	workspaceTree: WorkspaceTree | null;
-	isLoadingWorkspace: boolean;
-	workspaceError: string;
+	workspaceStore: WorkspaceStoreImpl;
 }
 
 function createInitialLanes(): ArenaLaneState[] {
@@ -56,9 +54,7 @@ function createInitialLane(id: ArenaLaneId, title: string): ArenaLaneState {
 		streamingError: "",
 		activeTools: [],
 		completedTools: [],
-		workspaceTree: null,
-		isLoadingWorkspace: false,
-		workspaceError: "",
+		workspaceStore: new WorkspaceStoreImpl(),
 	};
 }
 
@@ -168,93 +164,12 @@ function ArenaLaneSidebar({ lane, workspaceName }: { lane: ArenaLaneState; works
 	);
 }
 
-function WorkspaceTreeRows({ nodes, depth = 0 }: { nodes: WorkspaceTreeNode[]; depth?: number }) {
-	if (nodes.length === 0) {
-		return <div className="px-2 py-6 text-center text-xs text-[var(--inno-text-subtle)]">No files yet.</div>;
-	}
-	return (
-		<div className="space-y-0.5">
-			{nodes.map((node) => (
-				<div key={node.path || node.name}>
-					<div
-						className="flex min-w-0 items-center gap-1.5 rounded px-2 py-1 text-xs text-[var(--inno-text-muted)] hover:bg-[var(--inno-surface-muted)]"
-						style={{ paddingLeft: `${8 + depth * 12}px` }}
-						title={node.path || node.name}
-					>
-						{node.type === "directory" ? (
-							<Folder size={13} className="shrink-0 text-[var(--inno-accent)]" />
-						) : (
-							<FileText size={13} className="shrink-0 text-[var(--inno-text-subtle)]" />
-						)}
-						<span className="min-w-0 truncate">{node.name}</span>
-					</div>
-					{node.type === "directory" && node.children?.length ? (
-						<WorkspaceTreeRows nodes={node.children} depth={depth + 1} />
-					) : null}
-				</div>
-			))}
-		</div>
-	);
-}
-
-function ArenaWorkspacePanel({
-	lane,
-	workspaceName,
-	onRefresh,
-}: {
-	lane: ArenaLaneState;
-	workspaceName: string | null;
-	onRefresh: (lane: ArenaLaneState) => void;
-}) {
-	return (
-		<aside className="flex w-80 shrink-0 flex-col border-l border-[var(--inno-border)] bg-[var(--inno-workspace-bg)]">
-			<header className="flex h-9 items-center gap-2 border-b border-[var(--inno-border)] bg-[var(--inno-workspace-chrome)] px-3 text-xs">
-				<div className="min-w-0 flex-1">
-					<div className="truncate font-medium text-[var(--inno-text)]">{workspaceName ?? "Workspace"}</div>
-					<div className="truncate text-[10px] text-[var(--inno-text-subtle)]">{lane.workspaceId ?? "created on first send"}</div>
-				</div>
-				<button
-					type="button"
-					className="inno-icon-button flex h-7 w-7 shrink-0 rounded-md disabled:opacity-50"
-					title="Refresh workspace"
-					disabled={!lane.workspaceId || lane.isLoadingWorkspace}
-					onClick={() => onRefresh(lane)}
-				>
-					{lane.isLoadingWorkspace ? <Spinner size={13} /> : <RefreshCw size={13} />}
-				</button>
-			</header>
-			<div className="min-h-0 flex-1 overflow-y-auto p-2">
-				{!lane.workspaceId ? (
-					<div className="px-2 py-8 text-center text-xs text-[var(--inno-text-subtle)]">
-						The right workspace panel will appear here after the first shared prompt creates this lane's workspace.
-					</div>
-				) : lane.workspaceError ? (
-					<div className="rounded-md border border-[var(--inno-danger-border)] bg-[var(--inno-danger-bg)] px-2 py-1.5 text-xs text-[var(--inno-danger)]">
-						{lane.workspaceError}
-					</div>
-				) : lane.isLoadingWorkspace && !lane.workspaceTree ? (
-					<div className="flex items-center justify-center gap-2 px-2 py-8 text-xs text-[var(--inno-text-muted)]">
-						<Spinner size={13} />
-						Loading workspace...
-					</div>
-				) : lane.workspaceTree ? (
-					<WorkspaceTreeRows nodes={lane.workspaceTree.children} />
-				) : (
-					<div className="px-2 py-8 text-center text-xs text-[var(--inno-text-subtle)]">Workspace not loaded.</div>
-				)}
-			</div>
-		</aside>
-	);
-}
-
 function LanePanel({
 	lane,
 	workspaceName,
-	onRefreshWorkspace,
 }: {
 	lane: ArenaLaneState;
 	workspaceName: string | null;
-	onRefreshWorkspace: (lane: ArenaLaneState) => void;
 }) {
 	const scrollRef = useRef<HTMLDivElement | null>(null);
 	useEffect(() => {
@@ -340,7 +255,20 @@ function LanePanel({
 						) : null}
 					</div>
 				</div>
-				<ArenaWorkspacePanel lane={lane} workspaceName={workspaceName} onRefresh={onRefreshWorkspace} />
+				<aside className="w-[34vw] min-w-[360px] max-w-[720px] shrink-0 border-l border-[var(--inno-border)] bg-[var(--inno-workspace-bg)]">
+					{lane.workspaceId ? (
+						<WorkspaceBrowser
+							store={lane.workspaceStore}
+							workspaceId={lane.workspaceId}
+							sessionId={lane.sessionId}
+							showTerminal={false}
+						/>
+					) : (
+						<div className="flex h-full items-center justify-center px-6 text-center text-xs text-[var(--inno-text-subtle)]">
+							The right workspace panel will appear here after the first shared prompt forks the source workspace.
+						</div>
+					)}
+				</aside>
 			</div>
 		</section>
 	);
@@ -373,27 +301,6 @@ export function ClaudeArenaApp({ onSwitchChat }: { onSwitchChat?: () => void }) 
 		setLanes((current) => current.map((lane) => lane.id === id ? update(lane) : lane));
 	}, []);
 
-	const refreshLaneWorkspace = useCallback((lane: ArenaLaneState, workspaceId = lane.workspaceId) => {
-		if (!workspaceId) return;
-		patchLane(lane.id, (current) => ({ ...current, isLoadingWorkspace: true, workspaceError: "" }));
-		void getWorkspaceTree(workspaceId)
-			.then((tree) => {
-				patchLane(lane.id, (current) => ({
-					...current,
-					workspaceTree: tree,
-					isLoadingWorkspace: false,
-					workspaceError: "",
-				}));
-			})
-			.catch((err) => {
-				patchLane(lane.id, (current) => ({
-					...current,
-					isLoadingWorkspace: false,
-					workspaceError: err instanceof Error ? err.message : "Failed to load workspace",
-				}));
-			});
-	}, [patchLane]);
-
 	const ensureLaneSession = useCallback(async (lane: ArenaLaneState): Promise<{ sessionId: string; workspaceId: string | null }> => {
 		if (lane.sessionId) return { sessionId: lane.sessionId, workspaceId: lane.workspaceId };
 		const created = await createSession({
@@ -410,15 +317,12 @@ export function ClaudeArenaApp({ onSwitchChat }: { onSwitchChat?: () => void }) 
 		}));
 		void sessionsStore.load();
 		void workspacesStore.load();
-		if (created.workspaceId) refreshLaneWorkspace(lane, created.workspaceId);
 		return { sessionId: created.id, workspaceId: created.workspaceId ?? null };
-	}, [patchLane, refreshLaneWorkspace, sourceWorkspaceId]);
+	}, [patchLane, sourceWorkspaceId]);
 
 	const runLane = useCallback(async (lane: ArenaLaneState, prompt: string) => {
-		let activeWorkspaceId = lane.workspaceId;
 		try {
 			const { sessionId, workspaceId } = await ensureLaneSession(lane);
-			activeWorkspaceId = workspaceId;
 			patchLane(lane.id, (current) => ({
 				...current,
 				sessionId,
@@ -441,11 +345,11 @@ export function ClaudeArenaApp({ onSwitchChat }: { onSwitchChat?: () => void }) 
 			const message = err instanceof Error ? err.message : "Unknown error";
 			patchLane(lane.id, (current) => ({ ...current, streamingError: message }));
 		} finally {
-			refreshLaneWorkspace(lane, activeWorkspaceId);
+			void lane.workspaceStore.loadTree();
 			patchLane(lane.id, finalizeLane);
 			void sessionsStore.refresh();
 		}
-	}, [ensureLaneSession, patchLane, refreshLaneWorkspace]);
+	}, [ensureLaneSession, patchLane]);
 
 	const sendSharedPrompt = useCallback(() => {
 		const prompt = inputRef.current?.value.trim() ?? "";
@@ -539,7 +443,6 @@ export function ClaudeArenaApp({ onSwitchChat }: { onSwitchChat?: () => void }) 
 						key={lane.id}
 						lane={lane}
 						workspaceName={lane.workspaceId ? workspaces.find((workspace) => workspace.id === lane.workspaceId)?.name ?? null : null}
-						onRefreshWorkspace={refreshLaneWorkspace}
 					/>
 				))}
 			</main>

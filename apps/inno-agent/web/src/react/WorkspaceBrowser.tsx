@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent } from "react";
+import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Tree, type NodeRendererProps, type TreeApi, type CreateHandler, type RenameHandler, type DeleteHandler, type MoveHandler } from "react-arborist";
 import MDEditor from "@uiw/react-md-editor";
@@ -18,7 +18,7 @@ import { rust } from "@codemirror/lang-rust";
 import { go } from "@codemirror/lang-go";
 import type { Extension } from "@codemirror/state";
 import { RefreshCw, FileText, FileType, Globe, File, FolderOpen, Folder, Pencil, Save, X, PanelLeftClose, PanelLeftOpen, Sparkles, Download, FileCode2, Presentation, FileSpreadsheet } from "lucide-react";
-import { workspaceStore } from "../stores/workspace-store.js";
+import { workspaceStore, type WorkspaceStoreImpl } from "../stores/workspace-store.js";
 import { workspaceFileUrl, workspaceFolderZipUrl, triggerDownload } from "../api/workspace.js";
 import { workspacesStore } from "../stores/workspaces-store.js";
 import { sessionsStore } from "../stores/sessions-store.js";
@@ -39,6 +39,12 @@ import "@uiw/react-markdown-preview/markdown.css";
 const PptxPreview = lazy(() => import("./office/PptxPreview.js"));
 const DocxPreview = lazy(() => import("./office/DocxPreview.js"));
 const XlsxPreview = lazy(() => import("./office/XlsxPreview.js"));
+
+const WorkspaceBrowserStoreContext = createContext<WorkspaceStoreImpl>(workspaceStore);
+
+function useWorkspaceBrowserStore(): WorkspaceStoreImpl {
+	return useContext(WorkspaceBrowserStoreContext);
+}
 
 /* ---------- helpers ---------- */
 
@@ -297,6 +303,7 @@ function HtmlPreview({ file }: { file: WorkspaceFileDetail }) {
 
 function Preview({ file, isLoading }: { file: WorkspaceFileDetail; isLoading: boolean }) {
 	const { t } = useTranslation();
+	const store = useWorkspaceBrowserStore();
 	if (isLoading) return <div className="flex h-full items-center justify-center text-sm text-[var(--inno-text-muted)]">{t("preview.loadingFile")}</div>;
 	if (file.kind === "markdown") return <div className="workspace-scroll h-full overflow-y-auto p-5"><markdown-artifact content={normalizeMarkdownMath(file.content ?? "")} /></div>;
 		if (file.kind === "html") return <HtmlPreview file={file} />;
@@ -336,7 +343,7 @@ function Preview({ file, isLoading }: { file: WorkspaceFileDetail; isLoading: bo
 				<div>{t("preview.binaryFile")} · {formatSize(file.size)}</div>
 				<button
 					className="mt-2 flex items-center gap-1.5 rounded-md border border-[var(--inno-border)] px-3 py-1.5 text-xs text-[var(--inno-text-muted)] hover:bg-[var(--inno-surface-muted)]"
-					onClick={() => workspaceStore.openAsText()}
+					onClick={() => store.openAsText()}
 				>
 					<FileCode2 size={14} />
 					{t("preview.openAsText", "Open as Text")}
@@ -404,14 +411,15 @@ function CodeEditorPane({ value, onChange, lang }: { value: string; onChange: (v
 
 function FileContentPane({ onToggleSidebar, sidebarOpen }: { onToggleSidebar: () => void; sidebarOpen: boolean }) {
 	const { t } = useTranslation();
+	const store = useWorkspaceBrowserStore();
 	const simpleMode = useStoreSnapshot(settingsStore, () => settingsStore.settings?.simpleMode?.enabled === true);
-	const state = useStoreSnapshot(workspaceStore, () => ({
-		file: workspaceStore.currentFile,
-		isLoadingFile: workspaceStore.isLoadingFile,
-		isEditing: workspaceStore.isEditing,
-		editBuffer: workspaceStore.editBuffer,
-		isSaving: workspaceStore.isSaving,
-		error: workspaceStore.error,
+	const state = useStoreSnapshot(store, () => ({
+		file: store.currentFile,
+		isLoadingFile: store.isLoadingFile,
+		isEditing: store.isEditing,
+		editBuffer: store.editBuffer,
+		isSaving: store.isSaving,
+		error: store.error,
 	}));
 
 	const canEdit = state.file != null && isEditable(state.file.kind);
@@ -430,7 +438,7 @@ function FileContentPane({ onToggleSidebar, sidebarOpen }: { onToggleSidebar: ()
 						<button
 							disabled={state.isSaving}
 							className="flex h-7 items-center gap-1 rounded-md inno-primary-button px-2.5 text-xs text-white disabled:opacity-50"
-							onClick={() => void workspaceStore.saveFile()}
+							onClick={() => void store.saveFile()}
 						>
 							<Save size={12} />
 							{t("common.save", "Save")}
@@ -438,7 +446,7 @@ function FileContentPane({ onToggleSidebar, sidebarOpen }: { onToggleSidebar: ()
 						<button
 							disabled={state.isSaving}
 							className="flex h-7 items-center gap-1 rounded-md border border-[var(--inno-border)] px-2.5 text-xs text-[var(--inno-text-muted)] hover:bg-[var(--inno-surface-muted)] disabled:opacity-50"
-							onClick={() => workspaceStore.cancelEditing()}
+							onClick={() => store.cancelEditing()}
 						>
 							<X size={12} />
 							{t("common.cancel", "Cancel")}
@@ -448,9 +456,9 @@ function FileContentPane({ onToggleSidebar, sidebarOpen }: { onToggleSidebar: ()
 				{/* Editor body */}
 				<div className="min-h-0 flex-1">
 					{isMd ? (
-						<MarkdownEditorPane value={state.editBuffer} onChange={(v) => workspaceStore.updateEditBuffer(v)} />
+						<MarkdownEditorPane value={state.editBuffer} onChange={(v) => store.updateEditBuffer(v)} />
 					) : (
-						<CodeEditorPane value={state.editBuffer} onChange={(v) => workspaceStore.updateEditBuffer(v)} lang={langFromName(state.file.name)} />
+						<CodeEditorPane value={state.editBuffer} onChange={(v) => store.updateEditBuffer(v)} lang={langFromName(state.file.name)} />
 					)}
 				</div>
 			</div>
@@ -481,7 +489,7 @@ function FileContentPane({ onToggleSidebar, sidebarOpen }: { onToggleSidebar: ()
 					{canEdit && (
 						<button
 							className="flex h-7 items-center gap-1 rounded-md border border-[var(--inno-border)] px-2.5 text-xs text-[var(--inno-text-muted)] hover:bg-[var(--inno-surface-muted)] hover:text-[var(--inno-text)]"
-							onClick={() => workspaceStore.startEditing()}
+							onClick={() => store.startEditing()}
 						>
 							<Pencil size={12} />
 							{t("common.edit", "Edit")}
@@ -501,6 +509,7 @@ function FileContentPane({ onToggleSidebar, sidebarOpen }: { onToggleSidebar: ()
 /* ---------- Custom Node Renderer ---------- */
 
 function Node({ node, style, dragHandle }: NodeRendererProps<ArboristNode>) {
+	const store = useWorkspaceBrowserStore();
 	const selected = node.isSelected;
 	const isDir = !node.isLeaf;
 
@@ -518,7 +527,7 @@ function Node({ node, style, dragHandle }: NodeRendererProps<ArboristNode>) {
 				if (isDir) node.toggle();
 				else {
 					node.select();
-					void workspaceStore.selectFile(node.data.path);
+					void store.selectFile(node.data.path);
 				}
 			}}
 			onContextMenu={(e) => {
@@ -636,7 +645,19 @@ function DeleteConfirm({ paths, onConfirm, onCancel }: { paths: string[]; onConf
 
 /* ---------- Main Component ---------- */
 
-export function WorkspaceBrowser() {
+interface WorkspaceBrowserProps {
+	store?: WorkspaceStoreImpl;
+	workspaceId?: string | null;
+	sessionId?: string | null;
+	showTerminal?: boolean;
+}
+
+export function WorkspaceBrowser({
+	store: browserStore = workspaceStore,
+	workspaceId,
+	sessionId,
+	showTerminal = true,
+}: WorkspaceBrowserProps = {}) {
 	const { t } = useTranslation();
 	const treeRef = useRef<TreeApi<ArboristNode>>(null);
 	const skillUploadRef = useRef<HTMLInputElement>(null);
@@ -650,11 +671,11 @@ export function WorkspaceBrowser() {
 	const [deleteConfirm, setDeleteConfirm] = useState<{ ids: string[] } | null>(null);
 	const [isDragOver, setIsDragOver] = useState(false);
 
-	const state = useStoreSnapshot(workspaceStore, () => ({
-		tree: workspaceStore.tree,
-		isLoadingTree: workspaceStore.isLoadingTree,
-		isMutating: workspaceStore.isMutating,
-		activeWorkspaceId: workspaceStore.activeWorkspaceId,
+	const state = useStoreSnapshot(browserStore, () => ({
+		tree: browserStore.tree,
+		isLoadingTree: browserStore.isLoadingTree,
+		isMutating: browserStore.isMutating,
+		activeWorkspaceId: browserStore.activeWorkspaceId,
 	}));
 	const wsState = useStoreSnapshot(workspacesStore, () => ({
 		list: workspacesStore.workspaces,
@@ -662,6 +683,7 @@ export function WorkspaceBrowser() {
 	const sessState = useStoreSnapshot(sessionsStore, () => ({
 		currentSessionId: sessionsStore.currentSessionId,
 	}));
+	const effectiveSessionId = sessionId ?? sessState.currentSessionId;
 	const simpleMode = useStoreSnapshot(settingsStore, () => settingsStore.settings?.simpleMode?.enabled === true);
 	// The file tree pane keeps a fixed width; the content preview pane appears
 	// only once the panel is dragged wide enough to fit it beside the tree.
@@ -695,40 +717,44 @@ export function WorkspaceBrowser() {
 	}, []);
 
 	useEffect(() => {
-		void workspaceStore.loadTree();
+		if (workspaceId !== undefined) {
+			void browserStore.setActiveWorkspace(workspaceId);
+		} else {
+			void browserStore.loadTree();
+		}
 		if (wsState.list.length === 0) {
 			void workspacesStore.load();
 		}
-	}, []);
+	}, [browserStore, workspaceId, wsState.list.length]);
 
 	// Discover the workspace that the current session is bound to (read-only).
 	const [boundWorkspaceId, setBoundWorkspaceId] = useState<string | null>(null);
 	useEffect(() => {
-		if (!sessState.currentSessionId) {
+		if (workspaceId !== undefined || !effectiveSessionId) {
 			setBoundWorkspaceId(null);
 			return;
 		}
 		let cancelled = false;
-		void getSessionWorkspace(sessState.currentSessionId)
+		void getSessionWorkspace(effectiveSessionId)
 			.then((info) => { if (!cancelled) setBoundWorkspaceId(info.workspaceId); })
 			.catch(() => { if (!cancelled) setBoundWorkspaceId(null); });
 		return () => { cancelled = true; };
-	}, [sessState.currentSessionId]);
+	}, [effectiveSessionId, workspaceId]);
 
 	// Default the panel view to the session's bound workspace once known.
 	useEffect(() => {
-		if (boundWorkspaceId && state.activeWorkspaceId == null) {
-			void workspaceStore.setActiveWorkspace(boundWorkspaceId);
+		if (workspaceId === undefined && boundWorkspaceId && state.activeWorkspaceId == null) {
+			void browserStore.setActiveWorkspace(boundWorkspaceId);
 		}
-	}, [boundWorkspaceId, state.activeWorkspaceId]);
+	}, [browserStore, boundWorkspaceId, state.activeWorkspaceId, workspaceId]);
 
 	// The session is fixed to one workspace; show its name (no switcher).
 	const activeWorkspaceName = useMemo(() => {
-		const id = state.activeWorkspaceId ?? boundWorkspaceId;
+		const id = state.activeWorkspaceId ?? workspaceId ?? boundWorkspaceId;
 		if (!id) return "";
 		const ws = wsState.list.find((w) => w.id === id);
 		return ws ? `${ws.isTemp ? "🗒 " : ""}${ws.name}` : id;
-	}, [state.activeWorkspaceId, boundWorkspaceId, wsState.list]);
+	}, [state.activeWorkspaceId, boundWorkspaceId, workspaceId, wsState.list]);
 
 	// Listen for custom context-menu events from node renderer
 	useEffect(() => {
@@ -753,16 +779,16 @@ export function WorkspaceBrowser() {
 		const defaultName = isFile ? "untitled.txt" : "new-folder";
 		const itemPath = parentPath ? `${parentPath}/${defaultName}` : defaultName;
 		try {
-			await workspaceStore.createItem(parentPath, defaultName, isFile ? "file" : "directory");
+			await browserStore.createItem(parentPath, defaultName, isFile ? "file" : "directory");
 			return { id: itemPath };
 		} catch {
 			return null;
 		}
-	}, []);
+	}, [browserStore]);
 
 	const onRename: RenameHandler<ArboristNode> = useCallback(async ({ id, name }) => {
-		await workspaceStore.renameItem(id, name);
-	}, []);
+		await browserStore.renameItem(id, name);
+	}, [browserStore]);
 
 	const onDelete: DeleteHandler<ArboristNode> = useCallback(async ({ ids }) => {
 		setDeleteConfirm({ ids });
@@ -771,17 +797,17 @@ export function WorkspaceBrowser() {
 	const onMove: MoveHandler<ArboristNode> = useCallback(async ({ dragIds, parentId }) => {
 		const targetDir = parentId ?? "";
 		for (const sourceId of dragIds) {
-			await workspaceStore.moveItem(sourceId, targetDir);
+			await browserStore.moveItem(sourceId, targetDir);
 		}
-	}, []);
+	}, [browserStore]);
 
 	const handleConfirmDelete = useCallback(async () => {
 		if (!deleteConfirm) return;
 		for (const id of deleteConfirm.ids) {
-			await workspaceStore.deleteItem(id);
+			await browserStore.deleteItem(id);
 		}
 		setDeleteConfirm(null);
-	}, [deleteConfirm]);
+	}, [browserStore, deleteConfirm]);
 
 	/* --- Upload handlers --- */
 
@@ -795,11 +821,11 @@ export function WorkspaceBrowser() {
 		const files = e.target.files;
 		if (files?.length) {
 			for (const file of Array.from(files)) {
-				void workspaceStore.uploadSkillPackage(file);
+				void browserStore.uploadSkillPackage(file);
 			}
 			e.target.value = "";
 		}
-	}, []);
+	}, [browserStore]);
 
 	/** Only true when dragging files from OS (not internal react-dnd tree drags) */
 	const isExternalFileDrag = useCallback((e: DragEvent) => {
@@ -823,14 +849,15 @@ export function WorkspaceBrowser() {
 		e.preventDefault();
 		setIsDragOver(false);
 		if (e.dataTransfer.files?.length) {
-			void workspaceStore.uploadFiles(selectedParentPath(), e.dataTransfer.files);
+			void browserStore.uploadFiles(selectedParentPath(), e.dataTransfer.files);
 		}
-	}, [selectedParentPath, isExternalFileDrag]);
+	}, [browserStore, selectedParentPath, isExternalFileDrag]);
 
 	/* --- Toolbar button helpers --- */
 	const busy = state.isMutating || state.isLoadingTree;
 
 	return (
+		<WorkspaceBrowserStoreContext.Provider value={browserStore}>
 		<div ref={rootRef} className={`grid h-full min-h-0 gap-3 bg-transparent p-3 transition-[grid-template-columns] duration-200 ${showContent ? (sidebarOpen ? "grid-cols-[260px_minmax(0,1fr)]" : "grid-cols-[0px_minmax(0,1fr)]") : "grid-cols-[minmax(0,1fr)]"}`}>
 			{/* --- Tree pane --- */}
 			<aside
@@ -849,7 +876,7 @@ export function WorkspaceBrowser() {
 					<button disabled={busy} className="flex h-6 w-6 items-center justify-center rounded text-[var(--inno-text-subtle)] transition-colors hover:bg-[var(--inno-surface-muted)] hover:text-[var(--inno-accent)] disabled:opacity-40" title={t("files.uploadSkill", "Upload skill package (.zip/.md) to .skills")} onClick={() => skillUploadRef.current?.click()}>
 						<Sparkles size={14} />
 					</button>
-					<button disabled={busy} className="flex h-6 w-6 items-center justify-center rounded text-[var(--inno-text-subtle)] transition-colors hover:bg-[var(--inno-surface-muted)] hover:text-[var(--inno-text)] disabled:opacity-40" title={t("preview.refresh", "Refresh")} onClick={() => void workspaceStore.loadTree()}>
+					<button disabled={busy} className="flex h-6 w-6 items-center justify-center rounded text-[var(--inno-text-subtle)] transition-colors hover:bg-[var(--inno-surface-muted)] hover:text-[var(--inno-text)] disabled:opacity-40" title={t("preview.refresh", "Refresh")} onClick={() => void browserStore.loadTree()}>
 						<RefreshCw size={14} />
 					</button>
 					<input ref={skillUploadRef} type="file" multiple accept=".zip,application/zip,.md,text/markdown" className="hidden" onChange={handleSkillUploadChange} />
@@ -911,7 +938,7 @@ export function WorkspaceBrowser() {
 					<div className="flex min-h-0 flex-1 flex-col">
 						<FileContentPane onToggleSidebar={() => setSidebarOpen((v) => !v)} sidebarOpen={sidebarOpen} />
 					</div>
-					{!simpleMode && <TerminalDrawer />}
+					{showTerminal && !simpleMode && <TerminalDrawer />}
 				</section>
 			) : null}
 
@@ -921,5 +948,6 @@ export function WorkspaceBrowser() {
 			{/* Delete Confirmation */}
 			{deleteConfirm && <DeleteConfirm paths={deleteConfirm.ids} onConfirm={() => void handleConfirmDelete()} onCancel={() => setDeleteConfirm(null)} />}
 		</div>
+		</WorkspaceBrowserStoreContext.Provider>
 	);
 }
