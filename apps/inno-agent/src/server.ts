@@ -1920,7 +1920,23 @@ function maybeAutoGenerateTopic(sessionId: string): void {
 // HTTP Server
 // ---------------------------------------------------------------------------
 
+// 公开部署路径前缀：所有资源同时可从 /eduharnessarena/ 下访问，
+// 供 Caddy 按 calculus_quest 模式做"不剥前缀"的透传代理：
+//   @eduharness path /eduharnessarena /eduharnessarena/*
+//   handle @eduharness { reverse_proxy 127.0.0.1:<port> }
+// 直接访问（无前缀）不受影响；前缀可用 INNO_BASE_PATH 覆盖。
+const PUBLIC_BASE_PATH = (process.env.INNO_BASE_PATH || "/eduharnessarena").replace(/\/+$/, "");
+
 const server = createServer(async (req, res) => {
+	// 前缀归一化：/eduharnessarena/xxx → /xxx，后面的所有路由无感知
+	if (req.url === PUBLIC_BASE_PATH) {
+		res.writeHead(308, { Location: `${PUBLIC_BASE_PATH}/` });
+		res.end();
+		return;
+	}
+	if (req.url?.startsWith(`${PUBLIC_BASE_PATH}/`)) {
+		req.url = req.url.slice(PUBLIC_BASE_PATH.length);
+	}
 	const url = req.url ?? "/";
 	const method = req.method ?? "GET";
 
@@ -4333,6 +4349,10 @@ const server = createServer(async (req, res) => {
 
 const wss = new WebSocketServer({ noServer: true });
 server.on("upgrade", (req, socket, head) => {
+	// 与 HTTP 入口一致的前缀归一化（终端 WebSocket 也能走 /eduharnessarena/）
+	if (req.url?.startsWith(`${PUBLIC_BASE_PATH}/`)) {
+		req.url = req.url.slice(PUBLIC_BASE_PATH.length);
+	}
 	const url = req.url ?? "";
 		if (!bootstrapped) { socket.destroy(); return; }
 	const m = /^\/api\/terminal\/sessions\/([^/?]+)\/ws$/.exec(url.split("?")[0]);

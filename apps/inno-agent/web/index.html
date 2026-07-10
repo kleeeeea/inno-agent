@@ -8,9 +8,9 @@
 			// Apply theme before first paint to prevent flash of wrong theme (FOWT).
 			(function () {
 				try {
-					var t = localStorage.getItem("inno.theme") || "light";
-					var valid = ["light", "warm", "ocean", "innospark"];
-					if (valid.indexOf(t) === -1) t = "light";
+					var t = localStorage.getItem("inno.theme") || "claude";
+					var valid = ["light", "warm", "ocean", "innospark", "claude"];
+					if (valid.indexOf(t) === -1) t = "claude";
 					document.documentElement.setAttribute("data-theme", t);
 				} catch (e) {}
 			})();

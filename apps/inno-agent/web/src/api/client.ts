@@ -8,7 +8,18 @@ export class ApiError extends Error {
 	}
 }
 
-const BASE_URL = ""; // Same origin — Vite proxy in dev
+// 部署路径前缀（运行时探测）：应用可能挂在 /eduharnessarena/ 下由 Caddy 透传代理
+// （calculus_quest 模式），也可能直接根路径访问（本地 dev / Electron）。
+// 页面 URL 以前缀开头时，所有 API/SSE/WS 请求都带上同样的前缀。
+const PUBLIC_BASE_PATH = "/eduharnessarena";
+const BASE_URL = location.pathname === PUBLIC_BASE_PATH || location.pathname.startsWith(`${PUBLIC_BASE_PATH}/`)
+	? PUBLIC_BASE_PATH
+	: ""; // Same origin — Vite proxy in dev
+
+/** 给站内绝对路径（/api/...）补上部署前缀；client 之外的直连 fetch/WS 也应使用。 */
+export function withBase(path: string): string {
+	return `${BASE_URL}${path}`;
+}
 
 /* ── 登录态（参考 EduClaw：token 存 localStorage，请求带 Bearer 头） ── */
 
@@ -108,7 +119,7 @@ async function* readSSEStream<T>(res: Response, signal?: AbortSignal): AsyncGene
 export async function* streamSSE<T>(url: string, body: unknown, signal?: AbortSignal): AsyncGenerator<T> {
 	let res: Response;
 	try {
-		res = await fetch(url, {
+		res = await fetch(withBase(url), {
 			method: "POST",
 			headers: { "Content-Type": "application/json", ...authHeaders() },
 			body: JSON.stringify(body),
@@ -133,7 +144,7 @@ export async function* streamSSE<T>(url: string, body: unknown, signal?: AbortSi
 export async function* streamSSEGet<T>(url: string, signal?: AbortSignal): AsyncGenerator<T> {
 	let res: Response;
 	try {
-		res = await fetch(url, { method: "GET", headers: authHeaders(), signal });
+		res = await fetch(withBase(url), { method: "GET", headers: authHeaders(), signal });
 	} catch (err) {
 		if (signal?.aborted) return;
 		throw err;

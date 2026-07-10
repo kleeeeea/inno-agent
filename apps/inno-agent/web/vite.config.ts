@@ -43,6 +43,9 @@ const stubLmStudioPlugin = {
 };
 
 export default defineConfig({
+	// 相对资源路径：让构建产物既能挂在根路径，也能挂在 /eduharnessarena/ 这类
+	// 子路径前缀下（Caddy 透传代理，calculus_quest 模式）
+	base: "./",
 	plugins: [
 		stubLmStudioPlugin,
 		react(),

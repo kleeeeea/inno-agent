@@ -25,8 +25,8 @@ export function streamChat(prompt: string, sessionId?: string | null, signal?: A
  */
 export async function abortChat(): Promise<void> {
 	try {
-		const { authHeaders } = await import("./client.js");
-		await fetch("/api/chat/abort", { method: "POST", headers: authHeaders() });
+		const { authHeaders, withBase } = await import("./client.js");
+		await fetch(withBase("/api/chat/abort"), { method: "POST", headers: authHeaders() });
 	} catch {
 		// best-effort — the SSE close handler is a fallback
 	}

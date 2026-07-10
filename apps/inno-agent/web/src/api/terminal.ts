@@ -1,4 +1,4 @@
-import { apiFetch, getAuthToken } from "./client.js";
+import { apiFetch, getAuthToken, withBase } from "./client.js";
 import type { RunRecord, TerminalSessionInfo } from "../types/terminal.js";
 
 export async function createTerminalSession(input: {
@@ -22,7 +22,7 @@ export function terminalWsUrl(id: string): string {
 	// WebSocket 无法带 Authorization 头，登录 token 走 ?token= 查询参数
 	const token = getAuthToken();
 	const query = token ? `?token=${encodeURIComponent(token)}` : "";
-	return `${proto}//${location.host}/api/terminal/sessions/${encodeURIComponent(id)}/ws${query}`;
+	return `${proto}//${location.host}${withBase(`/api/terminal/sessions/${encodeURIComponent(id)}/ws`)}${query}`;
 }
 
 export async function listRuns(sessionId: string, limit = 20): Promise<RunRecord[]> {

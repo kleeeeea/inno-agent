@@ -1160,7 +1160,10 @@ export function SettingsPanel() {
 
 	useEffect(() => {
 		void settingsStore.load();
-		void fetch("/api/health").then((res) => setHealthOk(res.ok)).catch(() => setHealthOk(false));
+		void import("../api/client.js")
+			.then(({ withBase }) => fetch(withBase("/api/health")))
+			.then((res) => setHealthOk(res.ok))
+			.catch(() => setHealthOk(false));
 		void getWikiStats().then(setWikiStats).catch(() => setWikiStats(null));
 	}, []);
 
