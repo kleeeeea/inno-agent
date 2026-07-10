@@ -1,0 +1,13 @@
+packages:
+  - "apps/inno-agent"
+  - "apps/inno-agent/web"
+allowBuilds:
+  '@google/genai': true
+  '@parcel/watcher': true
+  electron-winstaller: false
+  esbuild: true
+  koffi: true
+  node-pty: true
+  protobufjs: true
+  sharp: true
+  tesseract.js: true
