@@ -24,7 +24,26 @@ if ! command -v npm >/dev/null 2>&1; then
   fi
 fi
 # pnpm 找不到就回退 npm（本仓库本来就是 npm workspaces，package-lock.json 在）
-if command -v pnpm >/dev/null 2>&1; then
+# 可通过 PKG=npm / PKG=pnpm 手动指定；默认优先使用 package-lock.json 对应的 npm。
+REQUESTED_PKG="${PKG:-}"
+if [ -n "${REQUESTED_PKG}" ]; then
+  case "${REQUESTED_PKG}" in
+    npm|pnpm)
+      if command -v "${REQUESTED_PKG}" >/dev/null 2>&1; then
+        PKG="${REQUESTED_PKG}"
+      else
+        echo "错误：指定的包管理器 ${REQUESTED_PKG} 不在 PATH"
+        exit 1
+      fi
+      ;;
+    *)
+      echo "错误：PKG 只能是 npm 或 pnpm，当前是：${REQUESTED_PKG}"
+      exit 1
+      ;;
+  esac
+elif [ -f package-lock.json ] && command -v npm >/dev/null 2>&1; then
+  PKG=npm
+elif command -v pnpm >/dev/null 2>&1; then
   PKG=pnpm
 elif command -v npm >/dev/null 2>&1; then
   PKG=npm

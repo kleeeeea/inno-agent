@@ -75,6 +75,26 @@ load_node_path() {
   fi
 }
 
+running_inside_inno_agent_terminal() {
+  local pid="$$"
+  local ppid=""
+  local command=""
+
+  while [[ -n "$pid" && "$pid" != "0" && "$pid" != "1" ]]; do
+    command="$(ps -p "$pid" -o command= 2>/dev/null || true)"
+    # Avoid stopping the backend that owns this terminal session.
+    if [[ "$command" == *"$ROOT/apps/inno-agent/dist/server.js"* || "$command" == *"apps/inno-agent/dist/server.js"* || "$command" == *" dist/server.js"* ]]; then
+      return 0
+    fi
+
+    ppid="$(ps -p "$pid" -o ppid= 2>/dev/null | tr -d ' ' || true)"
+    [[ -n "$ppid" && "$ppid" != "$pid" ]] || break
+    pid="$ppid"
+  done
+
+  return 1
+}
+
 install_deps() {
   case "$PKG" in
     npm)
@@ -111,7 +131,9 @@ info "clean install root=$ROOT"
 load_node_path
 
 if [[ "$RESET_FIRST" == true ]]; then
-  if [[ -x "$ROOT/reset_error.sh" ]]; then
+  if running_inside_inno_agent_terminal; then
+    warn "running inside Inno Agent terminal; skipping reset to avoid killing this shell"
+  elif [[ -x "$ROOT/reset_error.sh" ]]; then
     bash "$ROOT/reset_error.sh" --port "$PORT" --web-port "$WEB_PORT" --keep-logs
   else
     warn "reset_error.sh is missing or not executable; skipping reset"
