@@ -52,6 +52,8 @@ import { applyRuntimeEnvironment, parseRuntimeArgs, resolveRuntimePaths } from "
 import { questionBridge, type QuestionBridgeResult } from "./agent/question-bridge.js";
 import { DEFAULT_WORKSPACE_ID, TEMP_WORKSPACE_ID, WorkspaceRegistry } from "./workspace/workspace-registry.js";
 import { listPresets, listRemotePresets, ensurePresetCached, instantiatePreset } from "./presets/preset-store.js";
+import { handleGeneratePreset, handleImportPreset } from "./features/packages/index.js";
+import { initAuth, loginUser, getUserById, authenticateRequest } from "./features/auth/auth-service.js";
 import { createContentSource, type RemoteContentSource } from "./content-source/index.js";
 import { mapWithConcurrency } from "./content-source/types.js";
 import { RunRecordStore } from "./terminal/run-record-store.js";
@@ -202,6 +204,9 @@ async function ensureBootstrapped(): Promise<void> {
 
 		// ---- config (loaded lazily, not at process start) ----
 		config = loadConfig(paths.configPath);
+
+		// ---- auth（预置 user1–user15，参考 EduClaw 的 seedUsers） ----
+		initAuth(dataDir);
 
 		// ---- data directories ----
 		ensureDir(paths.learnerDataDir);
@@ -1934,6 +1939,48 @@ const server = createServer(async (req, res) => {
 			await ensureBootstrapped();
 		}
 
+		// --- Auth（参考 EduClaw：预置账号登录，注册关闭） ---
+		const authEnabled = config?.auth?.enabled !== false;
+
+		if (method === "GET" && url === "/api/auth/status") {
+			json(res, 200, { enabled: authEnabled });
+			return;
+		}
+
+		if (method === "POST" && url === "/api/auth/register") {
+			json(res, 403, { error: "注册已关闭，请使用预置账号登录" });
+			return;
+		}
+
+		if (method === "POST" && url === "/api/auth/login") {
+			const body = (await readBody(req).catch(() => ({}))) as Record<string, unknown>;
+			try {
+				const result = loginUser(String(body.username || ""), String(body.password || ""));
+				json(res, 200, result);
+			} catch (err) {
+				json(res, 400, { error: err instanceof Error ? err.message : "登录失败" });
+			}
+			return;
+		}
+
+		if (method === "GET" && url.split("?")[0] === "/api/auth/me") {
+			const payload = authenticateRequest(req);
+			const user = payload ? getUserById(payload.sub) : null;
+			if (!user) {
+				json(res, 401, { error: "未登录或登录状态已失效" });
+				return;
+			}
+			json(res, 200, user);
+			return;
+		}
+
+		// --- 全局鉴权门：除 auth / health 外的所有 /api/* 都需要 Bearer token ---
+		// （对应参考实现里每条路由挂的 requireAuth 中间件）
+		if (authEnabled && url.startsWith("/api/") && !authenticateRequest(req)) {
+			json(res, 401, { error: "未登录或登录状态已失效" });
+			return;
+		}
+
 		// --- Jobs CRUD ---
 		if (method === "GET" && url === "/api/jobs") {
 			json(res, 200, jobStore.list());
@@ -3405,6 +3452,35 @@ const server = createServer(async (req, res) => {
 			return;
 		}
 
+		// Agent Builder：LLM 三段式流水线生成 agent preset（元数据 → agent.md /
+		// rubric.md → SKILL.md），模型不可用时在 handleGeneratePreset 内回退到模板生成。
+		if (method === "POST" && url === "/api/presets/generate") {
+			const body = (await readBody(req).catch(() => ({}))) as Record<string, unknown>;
+			try {
+				const created = await handleGeneratePreset(paths, body, (label) => {
+					logger.info({ label }, "agent preset generation phase");
+				});
+				json(res, 201, created.meta);
+			} catch (err) {
+				logger.error({ err }, "failed to generate preset");
+				json(res, 400, { error: err instanceof Error ? err.message : "Failed to generate preset" });
+			}
+			return;
+		}
+
+		// Agent Builder：导入 agent 包 ZIP（JSON base64 载荷，与 /api/skills/upload 同风格）
+		if (method === "POST" && url === "/api/presets/import") {
+			const body = (await readBody(req).catch(() => ({}))) as Record<string, unknown>;
+			try {
+				const created = handleImportPreset(paths, body);
+				json(res, 201, created.meta);
+			} catch (err) {
+				logger.error({ err }, "failed to import preset zip");
+				json(res, 400, { error: err instanceof Error ? err.message : "Failed to import preset" });
+			}
+			return;
+		}
+
 		// Live catalog from the remote content hub (Simple Mode preset cards).
 		// Falls back to the bundled/cached presets when the hub is empty or
 		// unreachable, so the shipped templates always appear.
@@ -3419,7 +3495,10 @@ const server = createServer(async (req, res) => {
 			try {
 				const remote = await listRemotePresets(getContentSource(), forceRefresh);
 				if (remote.length > 0) {
-					json(res, 200, remote);
+					const merged = new Map<string, (typeof remote)[number]>();
+					for (const item of remote) merged.set(item.id, item);
+					for (const item of listPresets(paths)) merged.set(item.id, item);
+					json(res, 200, Array.from(merged.values()).sort((a, b) => a.name.localeCompare(b.name)));
 				} else {
 					json(res, 200, listPresets(paths));
 				}
@@ -4258,6 +4337,11 @@ server.on("upgrade", (req, socket, head) => {
 		if (!bootstrapped) { socket.destroy(); return; }
 	const m = /^\/api\/terminal\/sessions\/([^/?]+)\/ws$/.exec(url.split("?")[0]);
 	if (!m) {
+		socket.destroy();
+		return;
+	}
+	// 鉴权：WebSocket 无法带 Authorization 头，token 走 ?token= 查询参数
+	if (config?.auth?.enabled !== false && !authenticateRequest(req)) {
 		socket.destroy();
 		return;
 	}

@@ -4,8 +4,10 @@ import { settingsStore } from "../stores/settings-store.js";
 import { themeStore, type ThemeId } from "../stores/theme-store.js";
 import { arenaStore } from "../stores/arena-store.js";
 import { sessionsStore } from "../stores/sessions-store.js";
+import { authStore } from "../stores/auth-store.js";
 import { useStoreSnapshot } from "./hooks.js";
 import { ClaudeArenaApp } from "./ClaudeArenaApp.js";
+import { LoginPage } from "./LoginPage.js";
 
 type ClaudeViewMode = "chat" | "arena";
 const CLAUDE_VIEW_MODE_KEY = "inno.claudeViewMode";
@@ -31,8 +33,17 @@ export function PageContainer({ children }: { children: ReactNode }) {
 	const [claudeMode, setClaudeMode] = useState<ClaudeViewMode>(() => readClaudeViewMode());
 	// 欢迎屏上点了 Arena 但还没发送——toggle 高亮 Arena，界面仍停留在聊天欢迎屏
 	const arenaArmed = useStoreSnapshot(arenaStore, () => arenaStore.armed);
+	// 登录门（参考 EduClaw）：未登录只渲染登录页，登录后才挂载应用
+	const authStatus = useStoreSnapshot(authStore, () => authStore.status);
+	const isAuthed = authStatus === "authenticated" || authStatus === "disabled";
 
 	useEffect(() => {
+		void authStore.init();
+	}, []);
+
+	useEffect(() => {
+		// 设置（含远端主题同步）等登录态就绪后再拉，避免未登录时白吃一个 401
+		if (!isAuthed) return;
 		void settingsStore.load();
 		const unsubscribe = settingsStore.on("change", () => {
 			const remote = settingsStore.settings?.ui?.theme as ThemeId | undefined;
@@ -41,7 +52,7 @@ export function PageContainer({ children }: { children: ReactNode }) {
 			}
 		});
 		return unsubscribe;
-	}, []);
+	}, [isAuthed]);
 
 	const switchClaudeMode = useCallback((mode: ClaudeViewMode) => {
 		setClaudeMode(mode);
@@ -78,6 +89,20 @@ export function PageContainer({ children }: { children: ReactNode }) {
 			if (userNavigated) switchClaudeMode("chat");
 		});
 	}, [theme, claudeMode, switchClaudeMode]);
+
+	// 未登录：只渲染登录页；校验中渲染空壳避免闪屏
+	if (!isAuthed) {
+		return (
+			<StrictMode>
+				<div
+					className="page-container"
+					style={{ minHeight: "100vh", background: "var(--inno-background)", color: "var(--inno-text)" }}
+				>
+					{authStatus === "unauthenticated" ? <LoginPage /> : null}
+				</div>
+			</StrictMode>
+		);
+	}
 
 	return (
 		<StrictMode>

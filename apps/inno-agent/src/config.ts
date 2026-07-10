@@ -150,6 +150,10 @@ export interface InnoConfig {
 	ui?: {
 		theme: string;
 	};
+	/** 用户登录管理（参考 EduClaw）：默认开启；设 enabled: false 可关闭鉴权回到单用户模式。 */
+	auth?: {
+		enabled?: boolean;
+	};
 	/**
 	 * Optional OCR API config (Baidu PaddleOCR-VL). When the configured model
 	 * cannot recognize images, the agent calls the `ocr_image` tool which uses

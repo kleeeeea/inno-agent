@@ -16,6 +16,7 @@ import {
 	X,
 	FolderKanban,
 	Swords,
+	LogOut,
 } from "lucide-react";
 import { appStore } from "../stores/app-store.js";
 import { chatStore } from "../stores/chat-store.js";
@@ -29,6 +30,7 @@ import { useStoreSnapshot } from "./hooks.js";
 import { Spinner } from "./ui/Spinner.js";
 import { themeStore } from "../stores/theme-store.js";
 import { arenaStore, buildArenaHistories } from "../stores/arena-store.js";
+import { authStore } from "../stores/auth-store.js";
 import { getBrandInitials, getBrandName } from "../brand.js";
 
 interface SessionSidebarProps {
@@ -411,6 +413,8 @@ export function SessionSidebar({ collapsed }: SessionSidebarProps) {
 	const simpleMode = useStoreSnapshot(settingsStore, () => settingsStore.settings?.simpleMode?.enabled === true);
 	// 品牌名随主题切换（Claude 皮肤 → EduAgentArena）
 	const brand = useStoreSnapshot(themeStore, () => ({ name: getBrandName(), initials: getBrandInitials() }));
+	// 当前登录用户（底部用户面板；auth 关闭时为 null，面板不显示）
+	const authUser = useStoreSnapshot(authStore, () => authStore.user);
 	// "对战"类型筛选：列出所有历史 Arena 对战（A/B 工作区成对），点击可回到对应对战页。
 	// Arena 视图只在 Claude 主题下渲染，其它主题下隐藏该类型入口
 	const isClaudeTheme = useStoreSnapshot(themeStore, () => themeStore.current === "claude");
@@ -1002,6 +1006,26 @@ export function SessionSidebar({ collapsed }: SessionSidebarProps) {
 				>
 					<Plus size={14} /> {t("sidebar.newChat")}
 				</button>
+				{/* 用户面板（参考 EduClaw 的 AgentList 底部：头像 + 用户名 + 登出） */}
+				{authUser ? (
+					<div className="mt-2 flex items-center gap-2 rounded-lg border border-[var(--inno-border)] bg-[var(--inno-surface)] px-2.5 py-2">
+						<div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--inno-accent)] text-xs font-semibold uppercase text-white">
+							{authUser.username.slice(0, 1)}
+						</div>
+						<div className="min-w-0 flex-1">
+							<div className="inno-sidebar-text truncate text-xs font-medium text-[var(--inno-text)]">{authUser.username}</div>
+							<div className="truncate text-[10px] uppercase tracking-[0.18em] text-[var(--inno-text-subtle)]">{getBrandName()}</div>
+						</div>
+						<button
+							type="button"
+							className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[var(--inno-text-subtle)] transition-colors hover:bg-[rgba(220,38,38,0.08)] hover:text-[var(--inno-danger)]"
+							title="退出登录"
+							onClick={() => authStore.logout()}
+						>
+							<LogOut size={14} />
+						</button>
+					</div>
+				) : null}
 			</div>
 		</aside>
 	);

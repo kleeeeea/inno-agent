@@ -279,9 +279,10 @@ class ChatStoreImpl extends EventEmitter<ChatStoreEvents> {
 		this.pendingQuestion = null;
 		this.emit("change", undefined);
 		try {
+			const { authHeaders } = await import("../api/client.js");
 			await fetch("/api/chat/question-response", {
 				method: "POST",
-				headers: { "Content-Type": "application/json" },
+				headers: { "Content-Type": "application/json", ...authHeaders() },
 				body: JSON.stringify({ questionId, result }),
 			});
 		} catch {

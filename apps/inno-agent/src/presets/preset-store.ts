@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
+import { randomUUID } from "node:crypto";
 import type { RuntimePaths } from "../runtime.js";
 import type { WorkspaceMeta, WorkspaceRegistry } from "../workspace/workspace-registry.js";
 import type { RemoteContentSource } from "../content-source/index.js";
@@ -35,6 +36,16 @@ export interface PresetMeta {
 	category?: string;
 }
 
+export interface GeneratedPresetInput {
+	instruction: string;
+	documents?: Array<{ name: string; content: string }>;
+}
+
+export interface GeneratedPresetResult {
+	meta: PresetMeta;
+	dir: string;
+}
+
 /** Only simple, single-segment ids — blocks path traversal. */
 const PRESET_ID_RE = /^[a-zA-Z0-9._-]+$/;
 
@@ -44,6 +55,121 @@ function isValidPresetId(id: string): boolean {
 
 function isIgnoredPresetEntry(name: string): boolean {
 	return name === "__MACOSX" || name.startsWith(".") || name.startsWith("_");
+}
+
+function slugifyPresetId(value: string): string {
+	const ascii = value
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-+|-+$/g, "");
+	return ascii || `agent-${randomUUID().slice(0, 8)}`;
+}
+
+function compactText(value: string, maxLength: number): string {
+	return value.replace(/\s+/g, " ").trim().slice(0, maxLength);
+}
+
+function inferGeneratedPresetName(instruction: string, documents: Array<{ name: string; content: string }>): string {
+	const fromInstruction = compactText(instruction, 24);
+	if (fromInstruction) return fromInstruction.includes("Agent") || fromInstruction.includes("助手") ? fromInstruction : `${fromInstruction} Agent`;
+	const firstDoc = documents[0]?.name?.replace(/\.[^.]+$/, "").trim();
+	return firstDoc ? `${firstDoc} Agent` : "自定义 Agent";
+}
+
+function buildGeneratedPresetAgentMd(meta: PresetMeta, instruction: string, documents: Array<{ name: string; content: string }>): string {
+	const parts = [
+		`# ${meta.name}`,
+		"",
+		`> ${meta.description}`,
+		"",
+		"## Role",
+		"",
+		`You are ${meta.name}. Help the user complete the workflow described by this preset with clear plans, concrete outputs, and careful validation.`,
+		"",
+		"## Source Request",
+		"",
+		instruction.trim() || "The user uploaded source material and asked the system to infer a useful agent workspace.",
+		"",
+		"## Operating Guidelines",
+		"",
+		"- Clarify ambiguous requirements before making irreversible changes.",
+		"- Prefer concrete files, commands, examples, and checklists over vague advice.",
+		"- Preserve user-provided constraints and terminology.",
+		"- When source material is provided, ground answers in that material and call out assumptions.",
+		"- Before finalizing work, summarize what changed and how it was verified.",
+	];
+
+	if (documents.length > 0) {
+		parts.push("", "## Uploaded Reference Material", "");
+		for (const [index, doc] of documents.entries()) {
+			const content = doc.content.trim();
+			parts.push(`### ${index + 1}. ${doc.name}`, "", content.slice(0, 6000) || "[empty]", "");
+			if (content.length > 6000) parts.push("[content truncated in generated preset]", "");
+		}
+	}
+
+	return `${parts.join("\n").trim()}\n`;
+}
+
+function buildGeneratedPresetReadme(meta: PresetMeta, instruction: string, documents: Array<{ name: string; content: string }>): string {
+	return `${[
+		`# ${meta.name}`,
+		"",
+		meta.description,
+		"",
+		"## How to Use",
+		"",
+		"Open this preset from Simple Mode and start with a concrete task. The workspace includes `agent.md`, which defines the agent behavior for this template.",
+		"",
+		"## Original Builder Request",
+		"",
+		instruction.trim() || "Generated from uploaded material.",
+		"",
+		"## Included Material",
+		"",
+		documents.length > 0 ? documents.map((doc) => `- ${doc.name}`).join("\n") : "- None",
+	].join("\n").trim()}\n`;
+}
+
+export function createGeneratedPreset(paths: RuntimePaths, input: GeneratedPresetInput): GeneratedPresetResult {
+	const instruction = String(input.instruction || "").trim();
+	const documents = Array.isArray(input.documents)
+		? input.documents.map((doc, index) => ({
+			name: compactText(String(doc?.name || `Document ${index + 1}`), 120) || `Document ${index + 1}`,
+			content: String(doc?.content || "").slice(0, 80_000),
+		}))
+		: [];
+	if (!instruction && documents.length === 0) {
+		throw new Error("Instruction or documents are required");
+	}
+
+	const name = inferGeneratedPresetName(instruction, documents);
+	const descriptionSource = instruction || documents.map((doc) => doc.content).join("\n");
+	const description = compactText(descriptionSource, 140) || "由 Agent Builder 生成的自定义工作区模板。";
+	const baseId = slugifyPresetId(name);
+	const root = presetsDir(paths);
+	mkdirSync(root, { recursive: true });
+	let id = baseId;
+	let suffix = 2;
+	while (existsSync(join(root, id))) {
+		id = `${baseId}-${suffix}`;
+		suffix += 1;
+	}
+
+	const meta: PresetMeta = {
+		id,
+		name,
+		description,
+		category: "generated",
+		icon: "sparkles",
+	};
+	const dir = join(root, id);
+	mkdirSync(dir, { recursive: true });
+	writeFileSync(join(dir, "preset.json"), `${JSON.stringify(meta, null, 2)}\n`, "utf-8");
+	writeFileSync(join(dir, "agent.md"), buildGeneratedPresetAgentMd(meta, instruction, documents), "utf-8");
+	writeFileSync(join(dir, "README.md"), buildGeneratedPresetReadme(meta, instruction, documents), "utf-8");
+	logger.info({ presetId: id, dir }, "created generated preset");
+	return { meta, dir };
 }
 
 /** Absolute path to the local preset cache directory. */

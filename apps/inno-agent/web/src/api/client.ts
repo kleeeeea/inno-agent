@@ -10,12 +10,44 @@ export class ApiError extends Error {
 
 const BASE_URL = ""; // Same origin — Vite proxy in dev
 
+/* ── 登录态（参考 EduClaw：token 存 localStorage，请求带 Bearer 头） ── */
+
+const AUTH_TOKEN_KEY = "inno.auth.token";
+
+export function getAuthToken(): string | null {
+	return localStorage.getItem(AUTH_TOKEN_KEY);
+}
+
+export function setAuthToken(token: string | null): void {
+	if (token) localStorage.setItem(AUTH_TOKEN_KEY, token);
+	else localStorage.removeItem(AUTH_TOKEN_KEY);
+}
+
+/** 带上登录 token 的公共请求头；auth-store 之外的直连 fetch 也应使用。 */
+export function authHeaders(): Record<string, string> {
+	const token = getAuthToken();
+	return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+// 401 时通知 auth-store 清登录态并弹出登录页（回调注册避免循环 import）
+let unauthorizedHandler: (() => void) | null = null;
+export function setUnauthorizedHandler(handler: (() => void) | null): void {
+	unauthorizedHandler = handler;
+}
+
+function notifyUnauthorized(path: string): void {
+	// 登录接口自身的 401/400 由登录页展示，不触发全局登出
+	if (path.startsWith("/api/auth/")) return;
+	unauthorizedHandler?.();
+}
+
 export async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
 	const res = await fetch(`${BASE_URL}${path}`, {
-		headers: { "Content-Type": "application/json", ...options?.headers },
 		...options,
+		headers: { "Content-Type": "application/json", ...authHeaders(), ...options?.headers },
 	});
 	if (!res.ok) {
+		if (res.status === 401) notifyUnauthorized(path);
 		const body = await res.json().catch(() => ({}));
 		throw new ApiError(res.status, (body as Record<string, string>).error || res.statusText);
 	}
@@ -78,7 +110,7 @@ export async function* streamSSE<T>(url: string, body: unknown, signal?: AbortSi
 	try {
 		res = await fetch(url, {
 			method: "POST",
-			headers: { "Content-Type": "application/json" },
+			headers: { "Content-Type": "application/json", ...authHeaders() },
 			body: JSON.stringify(body),
 			signal,
 		});
@@ -87,6 +119,7 @@ export async function* streamSSE<T>(url: string, body: unknown, signal?: AbortSi
 		throw err;
 	}
 	if (!res.ok) {
+		if (res.status === 401) notifyUnauthorized(url);
 		const errBody = await res.json().catch(() => ({}));
 		throw new ApiError(res.status, (errBody as Record<string, string>).error || res.statusText);
 	}
@@ -100,13 +133,14 @@ export async function* streamSSE<T>(url: string, body: unknown, signal?: AbortSi
 export async function* streamSSEGet<T>(url: string, signal?: AbortSignal): AsyncGenerator<T> {
 	let res: Response;
 	try {
-		res = await fetch(url, { method: "GET", signal });
+		res = await fetch(url, { method: "GET", headers: authHeaders(), signal });
 	} catch (err) {
 		if (signal?.aborted) return;
 		throw err;
 	}
 	if (res.status === 404) return;
 	if (!res.ok) {
+		if (res.status === 401) notifyUnauthorized(url);
 		const errBody = await res.json().catch(() => ({}));
 		throw new ApiError(res.status, (errBody as Record<string, string>).error || res.statusText);
 	}

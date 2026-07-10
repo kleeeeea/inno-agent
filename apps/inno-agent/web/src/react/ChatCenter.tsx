@@ -14,7 +14,7 @@ import { workspaceStore } from "../stores/workspace-store.js";
 import { settingsStore } from "../stores/settings-store.js";
 import { appStore } from "../stores/app-store.js";
 import type { CreateSessionInput } from "../api/sessions.js";
-import { listRemotePresets } from "../api/presets.js";
+import { generatePreset, importPresetZip, listRemotePresets } from "../api/presets.js";
 import type { PresetMeta } from "../types/presets.js";
 import { arrayBufferToBase64 } from "../api/uploads.js";
 import { uploadWorkspaceFiles } from "../api/workspace.js";
@@ -25,6 +25,7 @@ import { QuestionDialog } from "./QuestionDialog.js";
 import { themeStore } from "../stores/theme-store.js";
 import { arenaStore } from "../stores/arena-store.js";
 import { getBrandInitials, getBrandName } from "../brand.js";
+import { AgentBuilderCard, type AgentBuilderBatchItem, type AgentBuilderDocument } from "./AgentBuilderCard.js";
 import "@earendil-works/pi-web-ui";
 
 // Thresholds for collapsing a large paste into a placeholder chip. A paste
@@ -529,6 +530,64 @@ export function ChatCenter() {
 		})();
 	}, [t]);
 
+	// Agent Builder 批量任务进度（多文档时逐个生成，与参考 LiteAgentBuilder 语义一致）
+	const [builderRuns, setBuilderRuns] = useState<AgentBuilderBatchItem[]>([]);
+
+	const refreshPresetsAfterBuild = useCallback(async (focusName: string) => {
+		const refreshed = await listRemotePresets(true);
+		setPresets(refreshed);
+		if (focusName) setPresetQuery(focusName);
+	}, []);
+
+	const handleAgentBuild = useCallback(async (instruction: string, documents: AgentBuilderDocument[]) => {
+		setWsError("");
+		// 多文档：逐个生成，每个文档产出一个独立模板，进度显示在批量任务列表里
+		if (documents.length > 1) {
+			const runs: AgentBuilderBatchItem[] = documents.map((doc, index) => ({
+				id: `${Date.now()}-${index}`,
+				name: doc.name,
+				status: "waiting",
+			}));
+			setBuilderRuns(runs);
+			let lastName = "";
+			for (let index = 0; index < documents.length; index += 1) {
+				setBuilderRuns((current) => current.map((run, i) => (i === index ? { ...run, status: "running" } : run)));
+				try {
+					const created = await generatePreset(instruction, [documents[index]]);
+					lastName = created.name;
+					setBuilderRuns((current) => current.map((run, i) => (i === index ? { ...run, status: "done", resultName: created.name } : run)));
+				} catch (err) {
+					const message = err instanceof Error ? err.message : "生成模板失败";
+					setBuilderRuns((current) => current.map((run, i) => (i === index ? { ...run, status: "error", error: message } : run)));
+				}
+			}
+			await refreshPresetsAfterBuild(lastName);
+			return;
+		}
+
+		try {
+			const created = await generatePreset(instruction, documents);
+			await refreshPresetsAfterBuild(created.name);
+		} catch (err) {
+			const message = err instanceof Error ? err.message : "生成模板失败";
+			setWsError(message);
+			throw new Error(message);
+		}
+	}, [refreshPresetsAfterBuild]);
+
+	const handleAgentImport = useCallback(async (file: File) => {
+		setWsError("");
+		try {
+			const dataBase64 = arrayBufferToBase64(await file.arrayBuffer());
+			const created = await importPresetZip(file.name, dataBase64);
+			await refreshPresetsAfterBuild(created.name);
+		} catch (err) {
+			const message = err instanceof Error ? err.message : "导入失败";
+			setWsError(message);
+			throw new Error(message);
+		}
+	}, [refreshPresetsAfterBuild]);
+
 	const handleSend = useCallback(() => {
 		const rawValue = inputRef.current?.value ?? "";
 		// Replace any paste-placeholder tokens (e.g. «已粘贴 N 行» / «Pasted N lines»)
@@ -881,6 +940,15 @@ export function ChatCenter() {
 						{renderInlineImagePreviews()}
 						{renderQuestionHint()}
 						{renderComposer(t("chat.welcomePlaceholder"))}
+
+						{simpleMode ? (
+							<AgentBuilderCard
+								disabled={chat.isSending || isUploading}
+								batchRuns={builderRuns}
+								onBuild={handleAgentBuild}
+								onImport={handleAgentImport}
+							/>
+						) : null}
 
 						{simpleMode && presets.length > 0 ? (
 							<PresetPicker
